@@ -1,0 +1,46 @@
+{
+  "categories": [
+    {
+      "id": "cat-tent",
+      "name": "テント",
+      "items": [],
+      "decidedId": null
+    },
+    {
+      "id": "cat-sleep",
+      "name": "シュラフ(寝袋)",
+      "items": [],
+      "decidedId": null
+    },
+    {
+      "id": "cat-mat",
+      "name": "マット",
+      "items": [],
+      "decidedId": null
+    },
+    {
+      "id": "cat-pack",
+      "name": "バックパック",
+      "items": [],
+      "decidedId": null
+    },
+    {
+      "id": "cat-cook",
+      "name": "クッカー・調理器具",
+      "items": [],
+      "decidedId": null
+    },
+    {
+      "id": "cat-light",
+      "name": "ヘッドライト・ランタン",
+      "items": [],
+      "decidedId": null
+    },
+    {
+      "id": "cat-furniture",
+      "name": "チェア・テーブル",
+      "items": [],
+      "decidedId": null
+    }
+  ]
+}
