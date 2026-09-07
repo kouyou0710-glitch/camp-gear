@@ -116,7 +116,7 @@
     cursor: pointer; font-size: 18px;
   }
 
-  .tabs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; margin: 4px 0 18px; border-bottom: 1px solid #E1DDCB; }
+  .tabs { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin: 4px 0 18px; border-bottom: 1px solid #E1DDCB; }
   .tab-btn {
     background: none; border: none; padding: 8px 2px; font-size: 11px; font-weight: 600; line-height: 1.3;
     color: #8B8672; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
@@ -223,6 +223,35 @@
   .dash-grid .dash-card { margin-bottom: 0; }
   .dash-news-item { display: block; padding: 8px 0; border-bottom: 1px solid #F0EEE3; text-decoration: none; font-size: 13px; color: #26241F; }
   .dash-news-item:last-of-type { border-bottom: none; }
+
+  .gallery-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+  .gallery-item { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: #E1DDCB; }
+  .gallery-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .gallery-item .gallery-caption {
+    position: absolute; left: 0; right: 0; bottom: 0; background: rgba(31,58,46,0.75); color: #EFEADA;
+    font-size: 10.5px; padding: 4px 6px; line-height: 1.3;
+  }
+  .gallery-item-actions { position: absolute; top: 4px; right: 4px; display: flex; gap: 4px; }
+  .gallery-item-actions button {
+    width: 24px; height: 24px; border-radius: 6px; border: none; background: rgba(255,255,255,0.85);
+    color: #5C5848; font-size: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+  .gallery-add-card {
+    aspect-ratio: 1; border-radius: 10px; border: 1px dashed #C7C2AC; background: none; color: #8B8672;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; gap: 4px;
+  }
+  .gallery-upload-status { font-size: 12px; color: #8B8672; margin-bottom: 10px; }
+  .gallery-controls { margin-bottom: 10px; }
+  .gallery-controls select {
+    width: 100%; border: 1px solid #E1DDCB; border-radius: 8px; padding: 8px 10px; font-size: 13px;
+    background: #FBFAF4; color: #26241F;
+  }
+  .gallery-event-badge {
+    position: absolute; left: 4px; top: 4px; background: rgba(31,58,46,0.85); color: #EFEADA;
+    font-size: 9.5px; padding: 2px 6px; border-radius: 999px; max-width: calc(100% - 8px);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .gallery-grid.mini { grid-template-columns: repeat(4, 1fr); gap: 6px; }
 </style>
 </head>
 <body>
@@ -283,6 +312,10 @@
         <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="14" height="14" rx="1" stroke="currentColor" stroke-width="1.8"/><path d="M17 8h4v10a2 2 0 0 1-2 2h-2" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M6 9h6M6 12h6M6 15h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
         ニュース
       </button>
+      <button class="tab-btn" data-tab="gallery">
+        <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="15" rx="2" stroke="currentColor" stroke-width="1.8"/><circle cx="8.5" cy="9.5" r="1.6" stroke="currentColor" stroke-width="1.6"/><path d="M4 16l5-5 4 4 3-3 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        アルバム
+      </button>
     </div>
 
     <div class="tab-panel" data-panel="home">
@@ -327,6 +360,10 @@
 
     <div class="tab-panel" data-panel="news">
       <div id="newsArea"></div>
+    </div>
+
+    <div class="tab-panel" data-panel="gallery">
+      <div id="galleryArea"></div>
     </div>
 
     <p style="text-align:center; margin-top:18px;">
@@ -377,6 +414,10 @@
     let campsiteAddOpen = false;
     let editingCampsiteId = null;
     let homeLocation = null; // { label, lat, lon } | null
+    let photos = []; // { id, path, caption, date }[]
+    let galleryUploading = false;
+    let galleryUploadStatus = "";
+    let galleryFilterEventId = "";
     const DEFAULT_EVENT_TODOS = ["天気を確認する", "サイト予約を確認する"];
     const DEFAULT_PACKING_ITEMS = [
       "テント", "タープ", "ペグ・ハンマー", "シュラフ(寝袋)", "マット",
@@ -438,6 +479,7 @@
           standaloneTodos = [];
           campsites = { items: [], decidedId: null };
           homeLocation = null;
+          photos = [];
           currentSha = null;
           await commitState("init data.json");
           return;
@@ -459,6 +501,7 @@
             ? parsed.campsites
             : { items: [], decidedId: null };
           homeLocation = parsed.homeLocation || null;
+          photos = Array.isArray(parsed.photos) ? parsed.photos : [];
           render();
         }
         setSync("同期済み", false);
@@ -471,11 +514,11 @@
     async function commitState(message) {
       const body = {
         message: message || "update camp gear board",
-        content: utf8ToBase64(JSON.stringify({ categories, events, standaloneTodos, campsites, homeLocation }, null, 2)),
+        content: utf8ToBase64(JSON.stringify({ categories, events, standaloneTodos, campsites, homeLocation, photos }, null, 2)),
         branch: BRANCH,
       };
       if (currentSha) body.sha = currentSha;
-      const snapshot = { categories, events, standaloneTodos, campsites, homeLocation };
+      const snapshot = { categories, events, standaloneTodos, campsites, homeLocation, photos };
 
       const res = await fetch(API_BASE, {
         method: "PUT",
@@ -501,6 +544,7 @@
         standaloneTodos = snapshot.standaloneTodos;
         campsites = snapshot.campsites;
         homeLocation = snapshot.homeLocation;
+        photos = snapshot.photos;
         lastKnownJson = JSON.stringify(snapshot, null, 2);
         render();
         return;
@@ -571,6 +615,178 @@
       }
     }
 
+    async function savePhotos(next) {
+      photos = next;
+      render();
+      try {
+        await commitState();
+      } catch (e) {
+        galleryUploadStatus = "保存に失敗しました: " + (e?.message || e);
+        renderGallery();
+      }
+    }
+
+    // ===== 写真ファイル自体をGitHubリポジトリに保存/削除する =====
+    async function uploadPhotoFile(path, base64Content) {
+      const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}`;
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ message: `add photo ${path}`, content: base64Content, branch: BRANCH }),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.message || `写真のアップロードに失敗しました(${res.status})`);
+      }
+    }
+
+    async function deletePhotoFile(path) {
+      const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}`;
+      const getRes = await fetch(`${url}?ref=${BRANCH}`, { headers: authHeaders() });
+      if (!getRes.ok) return; // すでに無ければ何もしない
+      const getJson = await getRes.json();
+      await fetch(url, {
+        method: "DELETE",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ message: `delete photo ${path}`, sha: getJson.sha, branch: BRANCH }),
+      });
+    }
+
+    function resizeImageToBase64(file, maxDim = 1600, quality = 0.75) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const reader = new FileReader();
+        reader.onload = () => { img.src = reader.result; };
+        reader.onerror = reject;
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) { height = Math.round(height * (maxDim / width)); width = maxDim; }
+            else { width = Math.round(width * (maxDim / height)); height = maxDim; }
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL("image/jpeg", quality);
+          resolve(dataUrl.split(",")[1]); // base64部分のみ
+        };
+        img.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function handlePhotoFiles(fileList, eventId) {
+      const files = Array.from(fileList || []);
+      if (files.length === 0) return;
+      galleryUploading = true;
+      let doneCount = 0;
+      galleryUploadStatus = `アップロード中... (0/${files.length})`;
+      renderGallery();
+      renderEvents();
+
+      const newEntries = [];
+      for (const file of files) {
+        try {
+          const base64 = await resizeImageToBase64(file);
+          const path = `photos/${uid("img")}.jpg`;
+          await uploadPhotoFile(path, base64);
+          newEntries.push({ id: uid("photo"), path, caption: "", date: toIsoDate(new Date()), eventId: eventId || null });
+        } catch (e) {
+          galleryUploadStatus = "一部の写真でエラー: " + (e?.message || e);
+        }
+        doneCount++;
+        galleryUploadStatus = `アップロード中... (${doneCount}/${files.length})`;
+        renderGallery();
+      }
+
+      galleryUploading = false;
+      galleryUploadStatus = newEntries.length > 0 ? "アップロードが完了しました" : (galleryUploadStatus || "");
+      await savePhotos([...photos, ...newEntries]);
+    }
+
+    function renderGallery() {
+      const el = document.getElementById("galleryArea");
+      if (!el) return;
+
+      const sortedEvents = [...events].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+      const eventLabel = (ev) => `${ev.title}${ev.date ? `(${shortDate(ev.date)})` : ""}`;
+
+      const visible = photos.filter(p => {
+        if (galleryFilterEventId === "") return true;
+        if (galleryFilterEventId === "none") return !p.eventId;
+        return p.eventId === galleryFilterEventId;
+      });
+      const sorted = [...visible].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+      const grid = sorted.map(p => renderPhotoThumb(p)).join("");
+
+      const uploadEventOptions = sortedEvents.map(ev =>
+        `<option value="${ev.id}">${escapeHtml(eventLabel(ev))}</option>`
+      ).join("");
+      const filterEventOptions = sortedEvents.map(ev =>
+        `<option value="${ev.id}" ${galleryFilterEventId === ev.id ? "selected" : ""}>${escapeHtml(eventLabel(ev))}のみ</option>`
+      ).join("");
+
+      el.innerHTML = `
+        ${galleryUploadStatus ? `<div class="gallery-upload-status">${escapeHtml(galleryUploadStatus)}</div>` : ""}
+        <div class="gallery-controls">
+          <select id="galleryUploadEventSelect">
+            <option value="">紐づける予定: なし</option>
+            ${uploadEventOptions}
+          </select>
+        </div>
+        <div class="gallery-grid">
+          <label class="gallery-add-card">
+            <span style="font-size:22px;">＋</span>
+            <span>写真を追加</span>
+            <input type="file" accept="image/*" multiple id="galleryFileInput" style="display:none;" ${galleryUploading ? "disabled" : ""} />
+          </label>
+          ${grid}
+        </div>
+        ${photos.length === 0 ? `<p class="empty-note">まだ写真がありません。「＋」から追加してみましょう。</p>` : ""}
+        ${sortedEvents.length > 0 ? `
+          <div class="gallery-controls">
+            <select id="galleryFilterSelect">
+              <option value="">すべて表示</option>
+              <option value="none" ${galleryFilterEventId === "none" ? "selected" : ""}>紐づけなしのみ</option>
+              ${filterEventOptions}
+            </select>
+          </div>
+        ` : ""}
+      `;
+
+      const fileInput = document.getElementById("galleryFileInput");
+      if (fileInput) {
+        fileInput.addEventListener("change", (e) => {
+          const evSelect = document.getElementById("galleryUploadEventSelect");
+          handlePhotoFiles(e.target.files, evSelect ? evSelect.value : "");
+          e.target.value = "";
+        });
+      }
+      const filterSelect = document.getElementById("galleryFilterSelect");
+      if (filterSelect) {
+        filterSelect.addEventListener("change", (e) => {
+          galleryFilterEventId = e.target.value;
+          renderGallery();
+        });
+      }
+    }
+
+    function renderPhotoThumb(p) {
+      const linkedEvent = events.find(e => e.id === p.eventId);
+      return `
+        <div class="gallery-item">
+          <img src="${escapeHtml(p.path)}" alt="${escapeHtml(p.caption || "キャンプの写真")}" loading="lazy" />
+          <div class="gallery-item-actions">
+            <button data-photo-caption="${p.id}" aria-label="キャプション編集">✎</button>
+            <button data-photo-remove="${p.id}" aria-label="削除">✕</button>
+          </div>
+          ${linkedEvent ? `<div class="gallery-event-badge">${escapeHtml(linkedEvent.title)}</div>` : ""}
+          ${p.caption ? `<div class="gallery-caption">${escapeHtml(p.caption)}</div>` : ""}
+        </div>
+      `;
+    }
+
     setSync("接続中...", false);
     fetchData();
     setInterval(() => fetchData({ silent: true }), POLL_INTERVAL_MS);
@@ -623,6 +839,7 @@
       renderWeatherTab();
       renderNewsTab();
       renderDashboard();
+      renderGallery();
       bindEvents();
     }
 
@@ -723,6 +940,7 @@
           const isOpen = openEventIds.has(ev.id);
           const { m, d } = formatDateShort(ev.date);
           const packingList = ev.packingList || [];
+          const eventPhotos = photos.filter(p => p.eventId === ev.id);
           const doneCount = (ev.todos || []).filter(t => t.done).length + packingList.filter(t => t.done).length;
           const totalCount = (ev.todos || []).length + packingList.length;
           return `
@@ -766,6 +984,15 @@
                     <button type="submit" class="btn btn-primary">保存</button>
                   </div>
                 </form>
+
+                <div class="section-title">写真</div>
+                <div class="gallery-grid mini">
+                  <label class="gallery-add-card">
+                    <span style="font-size:18px;">＋</span>
+                    <input type="file" accept="image/*" multiple data-event-photo-input="${ev.id}" style="display:none;" />
+                  </label>
+                  ${eventPhotos.map(p => renderPhotoThumb(p)).join("")}
+                </div>
               </div>
             </div>
           `;
@@ -1680,6 +1907,38 @@
             ev.id === eventId ? { ...ev, meetingPoint, directions } : ev
           );
           saveEvents(next);
+        });
+      });
+
+      // ===== 写真: 削除・キャプション編集(ギャラリー/予定詳細共通) =====
+      document.querySelectorAll("[data-photo-remove]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.getAttribute("data-photo-remove");
+          const target = photos.find(p => p.id === id);
+          if (!target) return;
+          if (!confirm("この写真を削除しますか?")) return;
+          await savePhotos(photos.filter(p => p.id !== id));
+          renderEvents();
+          deletePhotoFile(target.path).catch(() => {});
+        });
+      });
+      document.querySelectorAll("[data-photo-caption]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-photo-caption");
+          const target = photos.find(p => p.id === id);
+          if (!target) return;
+          const next = window.prompt("キャプションを入力", target.caption || "");
+          if (next === null) return;
+          savePhotos(photos.map(p => p.id === id ? { ...p, caption: next.trim() } : p)).then(renderEvents);
+        });
+      });
+
+      // ===== カレンダー: 予定詳細から直接写真を追加 =====
+      document.querySelectorAll("[data-event-photo-input]").forEach(input => {
+        input.addEventListener("change", (e) => {
+          const eventId = input.getAttribute("data-event-photo-input");
+          handlePhotoFiles(e.target.files, eventId);
+          e.target.value = "";
         });
       });
 
