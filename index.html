@@ -1373,14 +1373,28 @@
       return { name: first.properties.title, latitude: lat, longitude: lon, admin1: "" };
     }
 
-    async function geocodeAddress(address) {
-      let r = await geocodeQueryOnce(address);
-      if (!r) {
-        // 「山梨県南都留郡道志村」→「道志村」のように、都道府県・郡を取り除いて市区町村名だけで再検索
-        const simplified = address.replace(/^.*?[都道府県]/, "").replace(/^.*?郡/, "");
-        if (simplified && simplified !== address) {
-          r = await geocodeQueryOnce(simplified);
-        }
+    async function geocodeAddress(rawAddress) {
+      // 郵便番号(〒123-4567 など)・改行・全角スペースを取り除く
+      const normalized = rawAddress
+        .replace(/〒?\s*\d{3}-?\d{4}/g, "")
+        .replace(/[\r\n]+/g, " ")
+        .replace(/\u3000/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      const candidates = [normalized];
+
+      // 「山梨県南都留郡道志村10041」→「道志村10041」→「道志村」の順で候補を追加
+      const noPrefectureGun = normalized.replace(/^.*?[都道府県]/, "").replace(/^.*?郡/, "").trim();
+      if (noPrefectureGun && !candidates.includes(noPrefectureGun)) candidates.push(noPrefectureGun);
+
+      const noTrailingNumber = noPrefectureGun.replace(/[0-9０-９\-−ー]+$/, "").trim();
+      if (noTrailingNumber && !candidates.includes(noTrailingNumber)) candidates.push(noTrailingNumber);
+
+      let r = null;
+      for (const c of candidates) {
+        r = await geocodeQueryOnce(c);
+        if (r) break;
       }
       if (!r) throw new Error("該当する地名が見つかりませんでした。市区町村名だけ(例:道志村)で試してみてください");
       const label = [r.name, r.admin1].filter(Boolean).join(" / ");
