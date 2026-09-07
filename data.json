@@ -50,5 +50,22 @@
       "items": [],
       "decidedId": null
     }
-  ]
+  ],
+  "events": [],
+  "standaloneTodos": [],
+  "campsites": {
+    "items": [
+      {
+        "id": "site-1788779171543-913",
+        "name": "道志の村キャンプ場",
+        "area": "山梨",
+        "price": "",
+        "siteType": "",
+        "url": "https://doshinomori.jp/",
+        "memo": ""
+      }
+    ],
+    "decidedId": null
+  },
+  "homeLocation": null
 }
