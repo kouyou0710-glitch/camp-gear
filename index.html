@@ -71,8 +71,6 @@
   .candidate.decided { background: #F3F6F1; margin: 0 -4px; padding: 10px 8px; border-radius: 8px; border-bottom: none; }
   .campsite-panel-card { background: #FBFAF4; border: 1px solid #E1DDCB; border-radius: 12px; padding: 4px 12px; margin-bottom: 10px; }
   .campsite-panel-card:empty { display: none; }
-  .ai-summary { font-size: 12px; color: #3A5A45; background: #EFF3EA; border-radius: 6px; padding: 6px 8px; margin-top: 6px; line-height: 1.5; }
-  .ai-summary.pending { color: #8B8672; background: #F0EEE3; }
 
   .decide-dot {
     width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid #C7C2AC; background: #fff;
@@ -80,6 +78,22 @@
     color: #fff; padding: 0; cursor: pointer; font-size: 13px;
   }
   .candidate.decided .decide-dot { background: #1F3A2E; border-color: #1F3A2E; }
+
+  .campsite-row { flex-direction: column; align-items: stretch; gap: 6px; }
+  .campsite-toggle {
+    width: 100%; display: flex; align-items: center; gap: 8px; background: none; border: none;
+    text-align: left; cursor: pointer; padding: 0; font-size: 14px;
+  }
+  .status-btn-row { display: flex; gap: 6px; padding-left: 24px; }
+  .status-btn {
+    flex: 1; font-size: 11.5px; padding: 6px 4px; border-radius: 7px; border: 1px solid #E1DDCB;
+    background: #fff; color: #8B8672; cursor: pointer;
+  }
+  .status-btn.active-visited { background: #E7EFE5; border-color: #7A9B78; color: #3A5A45; font-weight: 600; }
+  .status-btn.active-want { background: #FBEBDD; border-color: #E0A46E; color: #A24A2A; font-weight: 600; }
+  .status-btn.active-none { background: #EDEAE0; border-color: #C7C2AC; color: #5C5848; font-weight: 600; }
+  .candidate-body-details { display: none; padding-left: 24px; }
+  .candidate-body-details.open { display: block; margin-top: 4px; }
 
   .candidate-body { flex: 1; min-width: 0; }
   .candidate-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
@@ -451,7 +465,8 @@
 
     let categories = [];
     let events = [];           // { id, title, date, memo, todos: [{id,text,done}] }
-    let campsites = { items: [] }; // { id, name, area, price, siteType, url, memo, checked, summary }[]
+    let campsites = { items: [] }; // { id, name, area, price, siteType, url, memo, status: "none"|"visited"|"want" }[]
+    let openCampsiteIds = new Set();
     let campsiteAddOpen = false;
     let editingCampsiteId = null;
     const summaryPendingIds = new Set();
@@ -550,7 +565,7 @@
           campsites = parsed.campsites && Array.isArray(parsed.campsites.items)
             ? { items: parsed.campsites.items.map(it => ({
                 ...it,
-                checked: it.checked != null ? it.checked : parsed.campsites.decidedId === it.id,
+                status: it.status || (it.checked ? "want" : "none"),
               })) }
             : { items: [] };
           homeLocation = parsed.homeLocation || null;
@@ -1226,29 +1241,35 @@
     }
 
     function renderCampsiteCard(item) {
-      const isDecided = !!item.checked;
+      const isOpen = openCampsiteIds.has(item.id);
+      const status = item.status || "none";
       const metaParts = [item.area, item.siteType, item.price].filter(Boolean);
+      const statusBtn = (val, label) => `
+        <button class="status-btn ${status === val ? "active-" + val : ""}" data-campsite-status="${item.id}|${val}">${label}</button>
+      `;
       return `
-        <div class="candidate ${isDecided ? "decided" : ""}">
-          <button class="decide-dot" data-campsite-decide="${item.id}" title="${isDecided ? "気になるを取り消す" : "気になるに追加"}">${isDecided ? "✓" : ""}</button>
-          <div class="candidate-body">
-            <div class="candidate-top">
-              <span class="candidate-name">${escapeHtml(item.name)}</span>
-            </div>
+        <div class="candidate campsite-row">
+          <button class="campsite-toggle" data-campsite-toggle="${item.id}">
+            <span class="chevron ${isOpen ? "open" : ""}">▾</span>
+            <span class="candidate-name">${escapeHtml(item.name)}</span>
+          </button>
+          <div class="status-btn-row">
+            ${statusBtn("visited", "行った")}
+            ${statusBtn("want", "行きたい")}
+            ${statusBtn("none", "無印")}
+          </div>
+          <div class="candidate-body-details ${isOpen ? "open" : ""}">
             ${metaParts.length ? `<div class="candidate-meta"><span class="candidate-memo">${escapeHtml(metaParts.join(" ・ "))}</span></div>` : ""}
             ${(item.memo || item.url) ? `
               <div class="candidate-meta">
                 ${item.memo ? `<span class="candidate-memo">${escapeHtml(item.memo)}</span>` : ""}
                 ${item.url ? `<a class="candidate-link" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">リンク</a>` : ""}
               </div>` : ""}
-            ${summaryPendingIds.has(item.id)
-              ? `<div class="ai-summary pending">AIサマリーを作成中...</div>`
-              : item.summary
-                ? `<div class="ai-summary">🤖 ${escapeHtml(item.summary)}</div>`
-                : ""}
+            <div class="form-actions" style="margin-top:8px;">
+              <button class="row-edit" data-campsite-edit="${item.id}" aria-label="編集">✎ 編集</button>
+              <button class="row-remove" data-campsite-remove="${item.id}" aria-label="削除">✕ 削除</button>
+            </div>
           </div>
-          <button class="row-edit" data-campsite-edit="${item.id}" aria-label="編集">✎</button>
-          <button class="row-remove" data-campsite-remove="${item.id}">✕</button>
         </div>
       `;
     }
@@ -1398,10 +1419,10 @@
         ensureHomeWeather();
       }
 
-      const checkedSites = (campsites.items || []).filter(i => i.checked);
+      const checkedSites = (campsites.items || []).filter(i => i.status === "want");
       let siteHtml;
       if (checkedSites.length === 0) {
-        siteHtml = `<p class="empty-note">「キャンプ場」タブで候補を「気になる」に追加すると、その場所の天気も表示されます。</p>`;
+        siteHtml = `<p class="empty-note">「キャンプ場」タブで候補を「行きたい」にすると、その場所の天気も表示されます。</p>`;
       } else {
         siteHtml = checkedSites.map(site => {
           if (!site.area) {
@@ -1884,7 +1905,7 @@
           if (editId) {
             nextItems = campsites.items.map(it => it.id === editId ? { ...it, name, area, price, siteType, url, memo } : it);
           } else {
-            newItem = { id: uid("site"), name, area, price, siteType, url, memo, checked: false, summary: "" };
+            newItem = { id: uid("site"), name, area, price, siteType, url, memo, status: "none" };
             nextItems = [...campsites.items, newItem];
             logActivity(`キャンプ場候補「${name}」を追加しました`);
           }
@@ -1895,12 +1916,20 @@
           // if (newItem) generateCampsiteSummary(newItem);
         });
       }
-      document.querySelectorAll("[data-campsite-decide]").forEach(btn => {
+      document.querySelectorAll("[data-campsite-toggle]").forEach(btn => {
         btn.addEventListener("click", () => {
-          const id = btn.getAttribute("data-campsite-decide");
+          const id = btn.getAttribute("data-campsite-toggle");
+          if (openCampsiteIds.has(id)) openCampsiteIds.delete(id); else openCampsiteIds.add(id);
+          render();
+        });
+      });
+      document.querySelectorAll("[data-campsite-status]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const [id, val] = btn.getAttribute("data-campsite-status").split("|");
           const item = campsites.items.find(it => it.id === id);
-          if (item && !item.checked) logActivity(`「${item.name}」を気になるリストに追加しました`);
-          const nextItems = campsites.items.map(it => it.id === id ? { ...it, checked: !it.checked } : it);
+          const labels = { visited: "行ったことある", want: "行きたい", none: "無印" };
+          if (item && item.status !== val) logActivity(`「${item.name}」を「${labels[val]}」にしました`);
+          const nextItems = campsites.items.map(it => it.id === id ? { ...it, status: val } : it);
           saveCampsites({ ...campsites, items: nextItems });
         });
       });
