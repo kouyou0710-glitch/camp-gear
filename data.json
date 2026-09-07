@@ -51,7 +51,130 @@
       "decidedId": null
     }
   ],
-  "events": [],
+  "events": [
+    {
+      "id": "event-1788781680335-1369",
+      "title": "道志の村",
+      "date": "2026-09-21",
+      "memo": "",
+      "todos": [
+        {
+          "id": "todo-1788781680335-4072",
+          "text": "天気を確認する",
+          "done": false
+        },
+        {
+          "id": "todo-1788781680335-3922",
+          "text": "サイト予約を確認する",
+          "done": false
+        }
+      ],
+      "packingList": [
+        {
+          "id": "pack-1788781680335-5217",
+          "text": "テント",
+          "done": false
+        },
+        {
+          "id": "pack-1788781680335-3169",
+          "text": "タープ",
+          "done": false
+        },
+        {
+          "id": "pack-1788781680335-6154",
+          "text": "ペグ・ハンマー",
+          "done": false
+        },
+        {
+          "id": "pack-1788781680335-4231",
+          "text": "シュラフ(寝袋)",
+          "done": false
+        },
+        {
+          "id": "pack-1788781680335-934",
+          "text": "マット",
+          "done": false
+        },
+        {
+          "id": "pack-1788781680335-6100",
+          "text": "ランタン",
+          "done": false
+        },
+        {
+          "id": "pack-1788781680335-5275",
+          "text": "ヘッドライト",
+          "done": false
+        },
+        {
+          "id": "pack-1788781680335-3177",
+          "text": "焚き火台",
+          "done": false
+        },
+        {
+          "id": "pack-1788781680335-4891",
+          "text": "薪・着火剤",
+          "done": false
+        },
+        {
+          "id": "pack-1788781680335-6732",
+          "text": "クッカー・食器",
+          "done": false
+        },
+        {
+          "id": "pack-1788781680335-2761",
+          "text": "カトラリー",
+          "done": false
+        },
+        {
+          "id": "pack-1788781680335-2897",
+          "text": "クーラーボックス",
+          "done": false
+        },
+        {
+          "id": "pack-1788781680335-9844",
+          "text": "飲料水",
+          "done": false
+        },
+        {
+          "id": "pack-1788781680335-4547",
+          "text": "着替え",
+          "done": false
+        },
+        {
+          "id": "pack-1788781680335-1553",
+          "text": "レインウェア",
+          "done": false
+        },
+        {
+          "id": "pack-1788781680335-1142",
+          "text": "タオル",
+          "done": false
+        },
+        {
+          "id": "pack-1788781680335-9936",
+          "text": "虫除け・日焼け止め",
+          "done": false
+        },
+        {
+          "id": "pack-1788781680335-9719",
+          "text": "救急セット・常備薬",
+          "done": false
+        },
+        {
+          "id": "pack-1788781680335-6373",
+          "text": "ゴミ袋",
+          "done": false
+        },
+        {
+          "id": "pack-1788781680335-5754",
+          "text": "モバイルバッテリー",
+          "done": false
+        }
+      ],
+      "meetingPoint": "",
+      "directions": ""
+    }
+  ],
   "standaloneTodos": [],
   "campsites": {
     "items": [
