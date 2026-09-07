@@ -159,6 +159,20 @@
   .event-new-form input, .event-new-form textarea { width: 100%; border: 1px solid #E1DDCB; border-radius: 7px; padding: 8px 10px; font-size: 13.5px; background: #fff; font-family: inherit; }
   .event-new-form .field-row { display: flex; gap: 7px; }
   .event-new-form .field-date { flex: 0 0 46%; }
+
+  .weather-card { background: #FBFAF4; border: 1px solid #E1DDCB; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+  .weather-card-title { font-size: 13px; font-weight: 700; color: #1F3A2E; margin-bottom: 8px; }
+  .weather-card-sub { font-size: 11.5px; color: #8B8672; margin-bottom: 8px; }
+  .weather-days { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+  .weather-day { flex: 0 0 68px; text-align: center; background: #F5F3E9; border-radius: 8px; padding: 8px 4px; }
+  .weather-day .wd-label { font-size: 11px; color: #7A5A1E; font-weight: 600; }
+  .weather-day .wd-icon { font-size: 22px; margin: 4px 0; }
+  .weather-day .wd-temp { font-size: 12px; color: #26241F; }
+  .weather-day .wd-temp .max { font-weight: 700; }
+  .weather-day .wd-temp .min { color: #8B8672; }
+  .weather-day .wd-rain { font-size: 10.5px; color: #3A6EA5; margin-top: 2px; }
+  .home-setup-form { display: flex; flex-direction: column; gap: 8px; }
+  .home-setup-form input { border: 1px solid #E1DDCB; border-radius: 7px; padding: 9px 12px; font-size: 13.5px; }
 </style>
 </head>
 <body>
@@ -196,7 +210,9 @@
 
     <div class="tabs">
       <button class="tab-btn" data-tab="gear">ギア選定</button>
+      <button class="tab-btn" data-tab="campsite">キャンプ場</button>
       <button class="tab-btn" data-tab="calendar">カレンダー</button>
+      <button class="tab-btn" data-tab="weather">天気</button>
     </div>
 
     <div class="tab-panel" data-panel="gear">
@@ -206,6 +222,10 @@
         <input id="newCategoryInput" placeholder="カテゴリを追加(例:焚き火台)" />
         <button type="submit" class="add-category-btn" aria-label="カテゴリを追加">+</button>
       </form>
+    </div>
+
+    <div class="tab-panel" data-panel="campsite">
+      <div id="campsiteList"></div>
     </div>
 
     <div class="tab-panel" data-panel="calendar">
@@ -219,6 +239,10 @@
         <input id="newStandaloneTodoInput" placeholder="やることを入力(例:保険証コピー)" />
         <button type="submit" class="add-todo-btn" aria-label="Todoを追加">+</button>
       </form>
+    </div>
+
+    <div class="tab-panel" data-panel="weather">
+      <div id="weatherArea"></div>
     </div>
 
     <p style="text-align:center; margin-top:18px;">
@@ -265,6 +289,12 @@
 
     let categories = [];
     let events = [];           // { id, title, date, memo, todos: [{id,text,done}] }
+    let campsites = { items: [], decidedId: null }; // { name, area, price, siteType, url, memo }[]
+    let campsiteAddOpen = false;
+    let editingCampsiteId = null;
+    let homeLocation = null; // { label, lat, lon } | null
+    let weatherCache = { homeKey: null, homeData: null, homeLoading: false, homeError: null,
+                          siteKey: null, siteData: null, siteLoading: false, siteError: null };
     let standaloneTodos = [];  // { id, text, done }
     let openIds = new Set();
     let openEventIds = new Set();
@@ -308,6 +338,8 @@
           categories = DEFAULT_CATEGORIES;
           events = [];
           standaloneTodos = [];
+          campsites = { items: [], decidedId: null };
+          homeLocation = null;
           currentSha = null;
           await commitState("init data.json");
           return;
@@ -325,6 +357,10 @@
           categories = Array.isArray(parsed.categories) ? parsed.categories : [];
           events = Array.isArray(parsed.events) ? parsed.events : [];
           standaloneTodos = Array.isArray(parsed.standaloneTodos) ? parsed.standaloneTodos : [];
+          campsites = parsed.campsites && Array.isArray(parsed.campsites.items)
+            ? parsed.campsites
+            : { items: [], decidedId: null };
+          homeLocation = parsed.homeLocation || null;
           render();
         }
         setSync("同期済み", false);
@@ -337,11 +373,11 @@
     async function commitState(message) {
       const body = {
         message: message || "update camp gear board",
-        content: utf8ToBase64(JSON.stringify({ categories, events, standaloneTodos }, null, 2)),
+        content: utf8ToBase64(JSON.stringify({ categories, events, standaloneTodos, campsites, homeLocation }, null, 2)),
         branch: BRANCH,
       };
       if (currentSha) body.sha = currentSha;
-      const snapshot = { categories, events, standaloneTodos };
+      const snapshot = { categories, events, standaloneTodos, campsites, homeLocation };
 
       const res = await fetch(API_BASE, {
         method: "PUT",
@@ -365,6 +401,8 @@
         categories = snapshot.categories;
         events = snapshot.events;
         standaloneTodos = snapshot.standaloneTodos;
+        campsites = snapshot.campsites;
+        homeLocation = snapshot.homeLocation;
         lastKnownJson = JSON.stringify(snapshot, null, 2);
         render();
         return;
@@ -407,6 +445,29 @@
       try {
         await commitState();
         setSync("保存しました", false);
+      } catch (e) {
+        setSync("保存に失敗しました: " + (e?.message || e), true);
+      }
+    }
+
+    async function saveCampsites(next) {
+      campsites = next;
+      render();
+      try {
+        await commitState();
+        setSync("保存しました", false);
+      } catch (e) {
+        setSync("保存に失敗しました: " + (e?.message || e), true);
+      }
+    }
+
+    async function saveHomeLocation(next) {
+      homeLocation = next;
+      weatherCache.homeKey = null;
+      weatherCache.homeData = null;
+      renderWeatherTab();
+      try {
+        await commitState();
       } catch (e) {
         setSync("保存に失敗しました: " + (e?.message || e), true);
       }
@@ -457,8 +518,10 @@
       });
 
       renderTabs();
+      renderCampsites();
       renderEvents();
       renderStandaloneTodos();
+      renderWeatherTab();
       bindEvents();
     }
 
@@ -550,6 +613,233 @@
         el.innerHTML = `<p class="empty-note">単独todoはまだありません。</p>`;
       } else {
         el.innerHTML = standaloneTodos.map(t => renderTodoRow(t, "standalone")).join("");
+      }
+    }
+
+    function renderCampsites() {
+      const el = document.getElementById("campsiteList");
+      if (!el) return;
+      const items = campsites.items || [];
+      const rows = items.map(item =>
+        editingCampsiteId === item.id ? renderCampsiteForm(item) : renderCampsiteCard(item)
+      ).join("");
+      const emptyNote = items.length === 0 ? `<p class="empty-note">まだ候補がありません。気になっているキャンプ場を追加してみましょう。</p>` : "";
+      const addArea = campsiteAddOpen
+        ? renderCampsiteForm(null)
+        : `<button class="add-candidate-btn" id="campsiteAddOpenBtn">+ キャンプ場候補を追加</button>`;
+      el.innerHTML = `${emptyNote}${rows}${addArea}`;
+    }
+
+    function renderCampsiteCard(item) {
+      const isDecided = campsites.decidedId === item.id;
+      const metaParts = [item.area, item.siteType, item.price].filter(Boolean);
+      return `
+        <div class="candidate ${isDecided ? "decided" : ""}">
+          <button class="decide-dot" data-campsite-decide="${item.id}" title="${isDecided ? "決定を取り消す" : "これに決定する"}">${isDecided ? "✓" : ""}</button>
+          <div class="candidate-body">
+            <div class="candidate-top">
+              <span class="candidate-name">${escapeHtml(item.name)}</span>
+            </div>
+            ${metaParts.length ? `<div class="candidate-meta"><span class="candidate-memo">${escapeHtml(metaParts.join(" ・ "))}</span></div>` : ""}
+            ${(item.memo || item.url) ? `
+              <div class="candidate-meta">
+                ${item.memo ? `<span class="candidate-memo">${escapeHtml(item.memo)}</span>` : ""}
+                ${item.url ? `<a class="candidate-link" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">リンク</a>` : ""}
+              </div>` : ""}
+          </div>
+          <button class="row-edit" data-campsite-edit="${item.id}" aria-label="編集">✎</button>
+          <button class="row-remove" data-campsite-remove="${item.id}">✕</button>
+        </div>
+      `;
+    }
+
+    function renderCampsiteForm(item) {
+      const isEdit = !!item;
+      const v = (f) => escapeHtml(item ? (item[f] || "") : "");
+      return `
+        <form class="item-form open" id="campsiteForm" ${isEdit ? `data-edit-campsite="${item.id}"` : ""}>
+          <input class="field" placeholder="キャンプ場名" data-cf="name" value="${v("name")}" />
+          <div class="field-row">
+            <input class="field" placeholder="エリア/住所(任意)" data-cf="area" value="${v("area")}" />
+            <input class="field" placeholder="料金(任意)" data-cf="price" value="${v("price")}" />
+          </div>
+          <div class="field-row">
+            <input class="field" placeholder="サイトタイプ(任意)" data-cf="siteType" value="${v("siteType")}" />
+            <input class="field" placeholder="URL(任意)" data-cf="url" value="${v("url")}" />
+          </div>
+          <input class="field" placeholder="メモ(任意)" data-cf="memo" value="${v("memo")}" />
+          <div class="form-actions">
+            <button type="button" class="btn btn-ghost" id="campsiteCancelBtn">キャンセル</button>
+            <button type="submit" class="btn btn-primary">${isEdit ? "保存" : "候補に追加"}</button>
+          </div>
+        </form>
+      `;
+    }
+
+    // ===== 天気(Open-Meteo。APIキー不要) =====
+    async function geocodeAddress(address) {
+      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(address)}&count=1&language=ja&format=json`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("地名の検索に失敗しました");
+      const json = await res.json();
+      if (!json.results || json.results.length === 0) throw new Error("該当する地名が見つかりませんでした");
+      const r = json.results[0];
+      const label = [r.name, r.admin1].filter(Boolean).join(" / ");
+      return { label, lat: r.latitude, lon: r.longitude };
+    }
+
+    async function fetchForecast(lat, lon) {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FTokyo&forecast_days=5`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("天気の取得に失敗しました");
+      const json = await res.json();
+      return json.daily;
+    }
+
+    function weatherEmoji(code) {
+      if (code === 0) return "☀️";
+      if ([1, 2, 3].includes(code)) return "⛅";
+      if ([45, 48].includes(code)) return "🌫️";
+      if ([51, 53, 55, 56, 57, 80, 81, 82].includes(code)) return "🌦️";
+      if ([61, 63, 65, 66, 67].includes(code)) return "🌧️";
+      if ([71, 73, 75, 77, 85, 86].includes(code)) return "🌨️";
+      if ([95, 96, 99].includes(code)) return "⛈️";
+      return "🌡️";
+    }
+
+    function weekdayLabel(iso) {
+      const d = new Date(iso + "T00:00:00");
+      const days = ["日", "月", "火", "水", "木", "金", "土"];
+      return `${d.getMonth() + 1}/${d.getDate()}(${days[d.getDay()]})`;
+    }
+
+    function renderForecastCard(title, sub, daily, loading, error) {
+      let body;
+      if (loading) {
+        body = `<p class="empty-note">読み込み中...</p>`;
+      } else if (error) {
+        body = `<p class="empty-note">${escapeHtml(error)}</p>`;
+      } else if (!daily) {
+        body = "";
+      } else {
+        body = `<div class="weather-days">${daily.time.map((date, i) => `
+          <div class="weather-day">
+            <div class="wd-label">${weekdayLabel(date)}</div>
+            <div class="wd-icon">${weatherEmoji(daily.weathercode[i])}</div>
+            <div class="wd-temp"><span class="max">${Math.round(daily.temperature_2m_max[i])}°</span> / <span class="min">${Math.round(daily.temperature_2m_min[i])}°</span></div>
+            <div class="wd-rain">☔${daily.precipitation_probability_max[i]}%</div>
+          </div>
+        `).join("")}</div>`;
+      }
+      return `
+        <div class="weather-card">
+          <div class="weather-card-title">${escapeHtml(title)}</div>
+          ${sub ? `<div class="weather-card-sub">${escapeHtml(sub)}</div>` : ""}
+          ${body}
+        </div>
+      `;
+    }
+
+    async function ensureHomeWeather() {
+      if (!homeLocation) return;
+      const key = `${homeLocation.lat},${homeLocation.lon}`;
+      if (weatherCache.homeKey === key || weatherCache.homeLoading) return;
+      weatherCache.homeLoading = true;
+      weatherCache.homeError = null;
+      try {
+        weatherCache.homeData = await fetchForecast(homeLocation.lat, homeLocation.lon);
+        weatherCache.homeKey = key;
+      } catch (e) {
+        weatherCache.homeError = e?.message || String(e);
+      } finally {
+        weatherCache.homeLoading = false;
+        renderWeatherTab();
+      }
+    }
+
+    async function ensureSiteWeather(site) {
+      if (!site || !site.area) return;
+      const key = `${site.id}:${site.area}`;
+      if (weatherCache.siteKey === key || weatherCache.siteLoading) return;
+      weatherCache.siteLoading = true;
+      weatherCache.siteError = null;
+      try {
+        const geo = await geocodeAddress(site.area);
+        weatherCache.siteData = await fetchForecast(geo.lat, geo.lon);
+        weatherCache.siteKey = key;
+      } catch (e) {
+        weatherCache.siteError = e?.message || String(e);
+      } finally {
+        weatherCache.siteLoading = false;
+        renderWeatherTab();
+      }
+    }
+
+    function renderWeatherTab() {
+      const el = document.getElementById("weatherArea");
+      if (!el) return;
+
+      let homeHtml;
+      if (!homeLocation) {
+        homeHtml = `
+          <div class="weather-card">
+            <div class="weather-card-title">自宅の天気</div>
+            <div class="weather-card-sub">まず自宅エリアを設定してください(市区町村名でOK)</div>
+            <form class="home-setup-form" id="homeSetupForm">
+              <input placeholder="例:世田谷区、横浜市など" id="homeAddressInput" />
+              <button type="submit" class="btn btn-primary">この場所で設定</button>
+            </form>
+          </div>
+        `;
+      } else {
+        homeHtml = renderForecastCard(
+          `自宅(${homeLocation.label})の天気`,
+          `<a href="#" id="homeChangeLink" style="color:#8B8672;">場所を変更する</a>`,
+          weatherCache.homeData, weatherCache.homeLoading, weatherCache.homeError
+        );
+        ensureHomeWeather();
+      }
+
+      const decidedSite = (campsites.items || []).find(i => i.id === campsites.decidedId);
+      let siteHtml;
+      if (!decidedSite) {
+        siteHtml = `<p class="empty-note">「キャンプ場」タブで候補を決定すると、その場所の天気も表示されます。</p>`;
+      } else if (!decidedSite.area) {
+        siteHtml = `<p class="empty-note">決定したキャンプ場「${escapeHtml(decidedSite.name)}」にエリア/住所が未入力です。キャンプ場タブで編集して追加してください。</p>`;
+      } else {
+        siteHtml = renderForecastCard(
+          `${decidedSite.name}の天気`,
+          decidedSite.area,
+          weatherCache.siteData, weatherCache.siteLoading, weatherCache.siteError
+        );
+        ensureSiteWeather(decidedSite);
+      }
+
+      el.innerHTML = homeHtml + siteHtml;
+
+      const homeSetupForm = document.getElementById("homeSetupForm");
+      if (homeSetupForm) {
+        homeSetupForm.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const input = document.getElementById("homeAddressInput");
+          const address = input.value.trim();
+          if (!address) return;
+          input.disabled = true;
+          try {
+            const geo = await geocodeAddress(address);
+            saveHomeLocation(geo);
+          } catch (err) {
+            input.disabled = false;
+            alert(err?.message || String(err));
+          }
+        });
+      }
+      const homeChangeLink = document.getElementById("homeChangeLink");
+      if (homeChangeLink) {
+        homeChangeLink.addEventListener("click", (e) => {
+          e.preventDefault();
+          saveHomeLocation(null);
+        });
       }
     }
 
@@ -691,6 +981,70 @@
         btn.addEventListener("click", () => {
           currentTab = btn.getAttribute("data-tab");
           renderTabs();
+        });
+      });
+
+      // ===== キャンプ場候補 =====
+      const campsiteAddOpenBtn = document.getElementById("campsiteAddOpenBtn");
+      if (campsiteAddOpenBtn) {
+        campsiteAddOpenBtn.addEventListener("click", () => {
+          campsiteAddOpen = true;
+          editingCampsiteId = null;
+          render();
+        });
+      }
+      document.querySelectorAll("[data-campsite-edit]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          editingCampsiteId = btn.getAttribute("data-campsite-edit");
+          campsiteAddOpen = false;
+          render();
+        });
+      });
+      const campsiteCancelBtn = document.getElementById("campsiteCancelBtn");
+      if (campsiteCancelBtn) {
+        campsiteCancelBtn.addEventListener("click", () => {
+          campsiteAddOpen = false;
+          editingCampsiteId = null;
+          render();
+        });
+      }
+      const campsiteForm = document.getElementById("campsiteForm");
+      if (campsiteForm) {
+        campsiteForm.addEventListener("submit", (e) => {
+          e.preventDefault();
+          const editId = campsiteForm.getAttribute("data-edit-campsite");
+          const name = campsiteForm.querySelector('[data-cf="name"]').value.trim();
+          if (!name) return;
+          const area = campsiteForm.querySelector('[data-cf="area"]').value.trim();
+          const price = campsiteForm.querySelector('[data-cf="price"]').value.trim();
+          const siteType = campsiteForm.querySelector('[data-cf="siteType"]').value.trim();
+          const url = campsiteForm.querySelector('[data-cf="url"]').value.trim();
+          const memo = campsiteForm.querySelector('[data-cf="memo"]').value.trim();
+          let nextItems;
+          if (editId) {
+            nextItems = campsites.items.map(it => it.id === editId ? { ...it, name, area, price, siteType, url, memo } : it);
+          } else {
+            nextItems = [...campsites.items, { id: uid("site"), name, area, price, siteType, url, memo }];
+          }
+          campsiteAddOpen = false;
+          editingCampsiteId = null;
+          saveCampsites({ ...campsites, items: nextItems });
+        });
+      }
+      document.querySelectorAll("[data-campsite-decide]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-campsite-decide");
+          saveCampsites({ ...campsites, decidedId: campsites.decidedId === id ? null : id });
+        });
+      });
+      document.querySelectorAll("[data-campsite-remove]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-campsite-remove");
+          const nextItems = campsites.items.filter(it => it.id !== id);
+          saveCampsites({
+            items: nextItems,
+            decidedId: campsites.decidedId === id ? null : campsites.decidedId,
+          });
         });
       });
 
