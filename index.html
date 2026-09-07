@@ -238,6 +238,8 @@
   .news-meta { font-size: 11.5px; color: #8B8672; margin-top: 3px; }
   .news-source { color: #7A5A1E; font-weight: 600; }
   .news-refresh-btn { margin-top: 12px; width: 100%; }
+  .news-source-check-row { display: flex; flex-wrap: wrap; gap: 10px; }
+  .news-source-check { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: #26241F; }
 
   .month-cal { background: #FBFAF4; border: 1px solid #E1DDCB; border-radius: 12px; padding: 12px; margin-bottom: 16px; }
   .month-cal-header { display: flex; align-items: center; justify-content: center; gap: 16px; font-size: 14px; font-weight: 700; color: #1F3A2E; margin-bottom: 10px; }
@@ -502,8 +504,7 @@
     let weatherCache = { homeKey: null, homeData: null, homeLoading: false, homeError: null,
                           sites: {} }; // sites[campsiteId] = { key, data, loading, error }
     let newsCache = { items: [], loading: false, error: null, loaded: false, sourceErrors: [] };
-    let newsKeywordFilter = "";
-    let newsSourceFilter = "";
+    let newsSettingsOpen = false;
     let standaloneTodos = [];  // { id, text, done }
     let openIds = new Set();
     let openEventIds = new Set();
@@ -1610,12 +1611,27 @@
     }
 
     // ===== ニュースフィード(RSS。CORSプロキシ経由で取得) =====
-    const NEWS_SOURCES = [
+    const FIXED_NEWS_SOURCES = [
       { name: "hinata", feed: "https://hinata.me/feed" },
       { name: "BE-PAL", feed: "https://www.bepal.net/feed/" },
       { name: "CAMP HACK", feed: "https://camphack.nap-camp.com/feed" },
       { name: "ハピキャン", feed: "https://happycamper.jp/feed" },
     ];
+    let newsEnabledSources = JSON.parse(localStorage.getItem("cg_news_enabled") || "null")
+      || { "hinata": true, "BE-PAL": true, "CAMP HACK": true, "ハピキャン": true };
+    let newsSearchKeyword = localStorage.getItem("cg_news_keyword") || "";
+
+    function getActiveNewsSources() {
+      const sources = FIXED_NEWS_SOURCES.filter(s => newsEnabledSources[s.name]);
+      if (newsSearchKeyword.trim()) {
+        sources.push({
+          name: `検索:${newsSearchKeyword.trim()}`,
+          feed: `https://news.google.com/rss/search?q=${encodeURIComponent(newsSearchKeyword.trim())}&hl=ja&gl=JP&ceid=JP:ja`,
+        });
+      }
+      return sources;
+    }
+
     const CORS_PROXIES = [
       (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
       (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
@@ -1680,13 +1696,23 @@
       newsCache.sourceErrors = [];
       renderNewsTab();
 
-      const results = await Promise.allSettled(NEWS_SOURCES.map(fetchOneFeed));
+      const activeSources = getActiveNewsSources();
+      if (activeSources.length === 0) {
+        newsCache.items = [];
+        newsCache.loaded = true;
+        newsCache.loading = false;
+        newsCache.error = "取得する配信元が選択されていません。設定から選んでください。";
+        renderNewsTab();
+        return;
+      }
+
+      const results = await Promise.allSettled(activeSources.map(fetchOneFeed));
       let all = [];
       results.forEach((r, i) => {
         if (r.status === "fulfilled") {
           all = all.concat(r.value);
         } else {
-          newsCache.sourceErrors.push(r.reason?.message || `${NEWS_SOURCES[i].name}: 取得できませんでした`);
+          newsCache.sourceErrors.push(r.reason?.message || `${activeSources[i].name}: 取得できませんでした`);
         }
       });
       all.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
@@ -1714,22 +1740,13 @@
         loadNews();
       }
 
-      const allSources = [...new Set(newsCache.items.map(i => i.source))];
-      const filtered = newsCache.items.filter(item => {
-        if (newsSourceFilter && item.source !== newsSourceFilter) return false;
-        if (newsKeywordFilter && !item.title.toLowerCase().includes(newsKeywordFilter.toLowerCase())) return false;
-        return true;
-      });
-
       let body;
       if (newsCache.loading) {
         body = `<p class="empty-note">読み込み中...</p>`;
       } else if (newsCache.items.length === 0) {
         body = `<p class="empty-note">${escapeHtml(newsCache.error || "記事がありません。")}</p>`;
-      } else if (filtered.length === 0) {
-        body = `<p class="empty-note">条件に合う記事が見つかりませんでした。</p>`;
       } else {
-        body = filtered.map(item => `
+        body = newsCache.items.map(item => `
           <a class="news-item" href="${escapeHtml(item.link)}" target="_blank" rel="noreferrer">
             <div class="news-title">${escapeHtml(item.title)}</div>
             <div class="news-meta"><span class="news-source">${escapeHtml(item.source)}</span> ${formatNewsDate(item.pubDate)}</div>
@@ -1741,20 +1758,33 @@
         ? `<p class="empty-note">${newsCache.sourceErrors.map(escapeHtml).join(" / ")}</p>`
         : "";
 
-      const filterHtml = newsCache.items.length > 0 ? `
-        <div class="gallery-controls">
-          <input type="text" id="newsKeywordInput" placeholder="キーワードで絞り込み(例:テント、焚き火)" value="${escapeHtml(newsKeywordFilter)}" style="width:100%; border:1px solid #E1DDCB; border-radius:8px; padding:8px 10px; font-size:13px; margin-bottom:8px;" />
-          <select id="newsSourceSelect">
-            <option value="">配信元: すべて</option>
-            ${allSources.map(s => `<option value="${escapeHtml(s)}" ${newsSourceFilter === s ? "selected" : ""}>配信元: ${escapeHtml(s)}</option>`).join("")}
-          </select>
-        </div>
-      ` : "";
+      const sourceCheckboxes = FIXED_NEWS_SOURCES.map(s => `
+        <label class="news-source-check">
+          <input type="checkbox" data-news-source-toggle="${escapeHtml(s.name)}" ${newsEnabledSources[s.name] ? "checked" : ""} />
+          ${escapeHtml(s.name)}
+        </label>
+      `).join("");
 
       el.innerHTML = `
+        <button class="section-toggle" id="newsSettingsToggle" style="border-top:none; margin-top:0;">
+          <span class="chevron ${newsSettingsOpen ? "open" : ""}">▾</span>
+          抽出条件を設定
+        </button>
+        <div class="section-toggle-body ${newsSettingsOpen ? "open" : ""}" style="margin-bottom:12px;">
+          <div class="gallery-controls">
+            <div style="font-size:12px; color:#8B8672; margin-bottom:6px;">配信元(サイトから直接取得)</div>
+            <div class="news-source-check-row">${sourceCheckboxes}</div>
+          </div>
+          <div class="gallery-controls">
+            <div style="font-size:12px; color:#8B8672; margin-bottom:6px;">検索キーワード(Googleニュースから該当記事のみ取得)</div>
+            <input type="text" id="newsKeywordInput" placeholder="例:焚き火台、ソロキャンプ" value="${escapeHtml(newsSearchKeyword)}"
+              style="width:100%; border:1px solid #E1DDCB; border-radius:8px; padding:8px 10px; font-size:13px;" />
+          </div>
+          <button class="btn btn-primary" id="newsApplySettingsBtn" style="width:100%;">この条件で取得し直す</button>
+        </div>
+
         <div class="weather-card">
           <div class="weather-card-title">キャンプ関連ニュース</div>
-          ${filterHtml}
           ${body}
           ${sourceErrorsHtml}
           <button class="btn btn-primary news-refresh-btn" id="newsRefreshBtn">更新する</button>
@@ -1768,19 +1798,25 @@
           loadNews();
         });
       }
-      const keywordInput = document.getElementById("newsKeywordInput");
-      if (keywordInput) {
-        keywordInput.addEventListener("input", (e) => {
-          newsKeywordFilter = e.target.value;
+      const settingsToggle = document.getElementById("newsSettingsToggle");
+      if (settingsToggle) {
+        settingsToggle.addEventListener("click", () => {
+          newsSettingsOpen = !newsSettingsOpen;
           renderNewsTab();
-          document.getElementById("newsKeywordInput")?.focus();
         });
       }
-      const sourceSelect = document.getElementById("newsSourceSelect");
-      if (sourceSelect) {
-        sourceSelect.addEventListener("change", (e) => {
-          newsSourceFilter = e.target.value;
-          renderNewsTab();
+      const applyBtn = document.getElementById("newsApplySettingsBtn");
+      if (applyBtn) {
+        applyBtn.addEventListener("click", () => {
+          document.querySelectorAll("[data-news-source-toggle]").forEach(cb => {
+            newsEnabledSources[cb.getAttribute("data-news-source-toggle")] = cb.checked;
+          });
+          const kwInput = document.getElementById("newsKeywordInput");
+          newsSearchKeyword = kwInput ? kwInput.value.trim() : "";
+          localStorage.setItem("cg_news_enabled", JSON.stringify(newsEnabledSources));
+          localStorage.setItem("cg_news_keyword", newsSearchKeyword);
+          newsCache.loaded = false;
+          loadNews();
         });
       }
     }
