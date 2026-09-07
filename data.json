@@ -309,7 +309,8 @@
         "siteType": "",
         "url": "https://doshinomori.jp/",
         "memo": "",
-        "checked": false
+        "checked": false,
+        "status": "none"
       },
       {
         "id": "site-1788788832532-7693",
@@ -319,7 +320,8 @@
         "siteType": "",
         "url": "https://fumotoppara.net/",
         "memo": "",
-        "checked": true
+        "checked": true,
+        "status": "want"
       },
       {
         "id": "site-1788790919806-2807",
@@ -330,11 +332,16 @@
         "url": "",
         "memo": "",
         "checked": true,
-        "summary": ""
+        "summary": "",
+        "status": "want"
       }
     ]
   },
-  "homeLocation": null,
+  "homeLocation": {
+    "label": "朝霞市 / 埼玉県",
+    "lat": 35.80472,
+    "lon": 139.60194
+  },
   "photos": [
     {
       "id": "photo-1788785850452-6905",
