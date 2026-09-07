@@ -30,7 +30,10 @@
     display: flex; align-items: flex-start; justify-content: space-between;
     gap: 12px; margin-bottom: 0; padding: 0 4px 12px;
   }
-  .hero-title { font-size: 22px; font-weight: 700; color: #1F3A2E; margin: 0; line-height: 1.3; }
+  .hero-title {
+    font-size: 18px; font-weight: 700; color: #1F3A2E; margin: 0; line-height: 1.3;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+  }
   .hero-icon {
     flex-shrink: 0; width: 46px; height: 46px; border-radius: 12px;
     overflow: hidden; border: 2px solid #1F3A2E;
@@ -84,6 +87,8 @@
     width: 100%; display: flex; align-items: center; gap: 8px; background: none; border: none;
     text-align: left; cursor: pointer; padding: 0; font-size: 14px;
   }
+  .campsite-toggle .candidate-name { flex: 1; min-width: 0; }
+  .candidate-distance { font-size: 11px; color: #7A5A1E; flex-shrink: 0; white-space: nowrap; }
   .status-btn-row { display: flex; gap: 6px; padding-left: 24px; }
   .status-btn {
     flex: 1; font-size: 11.5px; padding: 6px 4px; border-radius: 7px; border: 1px solid #E1DDCB;
@@ -475,6 +480,8 @@
     let events = [];           // { id, title, date, memo, todos: [{id,text,done}] }
     let campsites = { items: [] }; // { id, name, area, price, siteType, url, memo, status: "none"|"visited"|"want" }[]
     let openCampsiteIds = new Set();
+    let campsiteSortMode = "default"; // "default" | "status" | "distance"
+    const siteDistanceCache = {}; // itemId -> { key, km, loading, error }
     let campsiteAddOpen = false;
     let editingCampsiteId = null;
     const summaryPendingIds = new Set();
@@ -1237,7 +1244,26 @@
     function renderCampsites() {
       const el = document.getElementById("campsiteList");
       if (!el) return;
-      const items = campsites.items || [];
+      const statusOrder = { visited: 0, want: 1, none: 2 };
+      let items = [...(campsites.items || [])];
+
+      if (campsiteSortMode === "status") {
+        items.sort((a, b) => (statusOrder[a.status || "none"] - statusOrder[b.status || "none"]));
+      } else if (campsiteSortMode === "distance") {
+        items.sort((a, b) => {
+          const da = siteDistanceCache[a.id]?.km;
+          const db = siteDistanceCache[b.id]?.km;
+          if (da == null && db == null) return 0;
+          if (da == null) return 1;
+          if (db == null) return -1;
+          return da - db;
+        });
+      }
+
+      if (homeLocation) {
+        (campsites.items || []).forEach(item => ensureSiteDistance(item));
+      }
+
       const rows = items.map(item =>
         editingCampsiteId === item.id ? renderCampsiteForm(item) : renderCampsiteCard(item)
       ).join("");
@@ -1245,7 +1271,27 @@
       const addArea = campsiteAddOpen
         ? renderCampsiteForm(null)
         : `<button class="add-candidate-btn" id="campsiteAddOpenBtn">+ キャンプ場候補を追加</button>`;
-      el.innerHTML = `<div class="campsite-panel-card">${emptyNote}${rows}</div>${addArea}`;
+
+      const sortRow = `
+        <div class="gallery-controls">
+          <select id="campsiteSortSelect">
+            <option value="default" ${campsiteSortMode === "default" ? "selected" : ""}>並び替え: 追加順</option>
+            <option value="status" ${campsiteSortMode === "status" ? "selected" : ""}>並び替え: 評価別(行った→行きたい→無印)</option>
+            <option value="distance" ${campsiteSortMode === "distance" ? "selected" : ""}>並び替え: 自宅からの距離が近い順</option>
+          </select>
+          ${!homeLocation ? `<p class="empty-note" style="margin-top:6px;">距離を表示するには、天気タブで自宅エリアを設定してください。</p>` : ""}
+        </div>
+      `;
+
+      el.innerHTML = `${sortRow}<div class="campsite-panel-card">${emptyNote}${rows}</div>${addArea}`;
+
+      const sortSelect = document.getElementById("campsiteSortSelect");
+      if (sortSelect) {
+        sortSelect.addEventListener("change", (e) => {
+          campsiteSortMode = e.target.value;
+          render();
+        });
+      }
     }
 
     function renderCampsiteCard(item) {
@@ -1255,11 +1301,19 @@
       const statusBtn = (val, label) => `
         <button class="status-btn ${status === val ? "active-" + val : ""}" data-campsite-status="${item.id}|${val}">${label}</button>
       `;
+      const distCache = siteDistanceCache[item.id];
+      let distanceLabel = "";
+      if (homeLocation && item.area) {
+        if (distCache?.km != null) distanceLabel = `自宅から約${Math.round(distCache.km)}km`;
+        else if (distCache?.loading) distanceLabel = "距離を計算中...";
+        else if (distCache?.error) distanceLabel = "";
+      }
       return `
         <div class="candidate campsite-row">
           <button class="campsite-toggle" data-campsite-toggle="${item.id}">
             <span class="chevron ${isOpen ? "open" : ""}">▾</span>
             <span class="candidate-name">${escapeHtml(item.name)}</span>
+            ${distanceLabel ? `<span class="candidate-distance">${escapeHtml(distanceLabel)}</span>` : ""}
           </button>
           <div class="status-btn-row">
             ${statusBtn("visited", "行った")}
@@ -1326,6 +1380,32 @@
       if (!r) throw new Error("該当する地名が見つかりませんでした。市区町村名だけ(例:道志村)で試してみてください");
       const label = [r.name, r.admin1].filter(Boolean).join(" / ");
       return { label, lat: r.latitude, lon: r.longitude };
+    }
+
+    function haversineKm(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const toRad = (d) => (d * Math.PI) / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    async function ensureSiteDistance(item) {
+      if (!homeLocation || !item.area) return;
+      const cache = siteDistanceCache[item.id] || {};
+      const key = `${item.area}|${homeLocation.lat},${homeLocation.lon}`;
+      if (cache.key === key || cache.loading) return;
+      siteDistanceCache[item.id] = { ...cache, loading: true, error: null };
+      try {
+        const geo = await geocodeAddress(item.area);
+        const km = haversineKm(homeLocation.lat, homeLocation.lon, geo.lat, geo.lon);
+        siteDistanceCache[item.id] = { key, km, loading: false, error: null };
+      } catch (e) {
+        siteDistanceCache[item.id] = { key, km: null, loading: false, error: e?.message || String(e) };
+      }
+      render();
     }
 
     async function fetchForecast(lat, lon) {
