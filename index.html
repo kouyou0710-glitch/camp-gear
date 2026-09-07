@@ -122,24 +122,31 @@
   </div>
 
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-    import {
-      initializeFirestore, doc, onSnapshot, setDoc
-    } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+    // ===== GitHubリポジトリ情報 =====
+    const OWNER = "kouyou0710-glitch";
+    const REPO = "camp-gear";
+    const BRANCH = "main";
+    const DATA_PATH = "data.json";
+    // トークンはコードに書き込まず、この端末のブラウザにだけ保存する
+    function getToken() {
+      let t = localStorage.getItem("cg_github_token");
+      if (!t) {
+        t = window.prompt("GitHubのアクセストークンを入力してください(この端末にだけ保存されます)");
+        if (t) {
+          t = t.trim();
+          localStorage.setItem("cg_github_token", t);
+        }
+      }
+      return t || null;
+    }
+    function resetToken() {
+      localStorage.removeItem("cg_github_token");
+      location.reload();
+    }
+    window.resetToken = resetToken;
 
-    // ここをFirebaseコンソールからコピーした値に置き換え済み
-    const firebaseConfig = {
-      apiKey: "AIzaSyAw_02hpLaea51AZpVgO3h7180b5gJ5QKI",
-      authDomain: "camp-gear-1c6af.firebaseapp.com",
-      projectId: "camp-gear-1c6af",
-      storageBucket: "camp-gear-1c6af.firebasestorage.app",
-      messagingSenderId: "532946804284",
-      appId: "1:532946804284:web:763747640ac0364201ed39"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
-    const boardRef = doc(db, "campGear", "board");
+    const API_BASE = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${DATA_PATH}`;
+    const POLL_INTERVAL_MS = 6000;
 
     const DEFAULT_CATEGORIES = [
       { id: "cat-tent", name: "テント", items: [], decidedId: null },
@@ -154,21 +161,11 @@
     let categories = [];
     let openIds = new Set();
     let addingFormOpenFor = null;
-    let ready = false;
+    let currentSha = null;
+    let lastKnownJson = null;
 
     function uid(prefix) {
       return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-    }
-
-    async function saveCategories(next) {
-      categories = next;
-      render();
-      try {
-        await setDoc(boardRef, { categories: next, updatedAt: Date.now() });
-        setSync("同期済み", false);
-      } catch (e) {
-        setSync("保存に失敗しました: " + (e?.message || e), true);
-      }
     }
 
     function setSync(text, isErr) {
@@ -177,19 +174,105 @@
       el.className = "sync-status" + (isErr ? " err" : "");
     }
 
-    onSnapshot(boardRef, (snap) => {
-      if (snap.exists() && Array.isArray(snap.data().categories)) {
-        categories = snap.data().categories;
-      } else if (!ready) {
-        categories = DEFAULT_CATEGORIES;
-        setDoc(boardRef, { categories, updatedAt: Date.now() }).catch(() => {});
+    function authHeaders() {
+      const token = getToken();
+      if (!token) throw new Error("トークンが入力されていません");
+      return {
+        Authorization: `token ${token}`,
+        Accept: "application/vnd.github+json",
+      };
+    }
+
+    function utf8ToBase64(str) {
+      return btoa(unescape(encodeURIComponent(str)));
+    }
+    function base64ToUtf8(b64) {
+      return decodeURIComponent(escape(atob(b64)));
+    }
+
+    // データファイルを取得。まだ存在しなければ初期値を作成する
+    async function fetchData({ silent } = {}) {
+      try {
+        const res = await fetch(`${API_BASE}?ref=${BRANCH}&t=${Date.now()}`, { headers: authHeaders() });
+        if (res.status === 404) {
+          categories = DEFAULT_CATEGORIES;
+          currentSha = null;
+          await pushData(categories, "init data.json");
+          return;
+        }
+        if (!res.ok) {
+          if (!silent) setSync(`読み込み失敗(${res.status}): トークンやリポジトリ名を確認してください`, true);
+          return;
+        }
+        const json = await res.json();
+        currentSha = json.sha;
+        const text = base64ToUtf8(json.content.replace(/\n/g, ""));
+        if (text !== lastKnownJson) {
+          lastKnownJson = text;
+          const parsed = JSON.parse(text);
+          categories = Array.isArray(parsed.categories) ? parsed.categories : [];
+          render();
+        }
+        setSync("同期済み", false);
+      } catch (e) {
+        if (!silent) setSync("接続エラー: " + (e?.message || e), true);
       }
-      ready = true;
-      setSync("同期済み(リアルタイム)", false);
+    }
+
+    // データファイルをGitHubに書き込む(コミット)
+    async function pushData(next, message) {
+      const body = {
+        message: message || "update camp gear board",
+        content: utf8ToBase64(JSON.stringify({ categories: next }, null, 2)),
+        branch: BRANCH,
+      };
+      if (currentSha) body.sha = currentSha;
+
+      const res = await fetch(API_BASE, {
+        method: "PUT",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (res.status === 409) {
+        // 他の人が先に書き込んでいた場合。最新を取得してshaだけ更新し、もう一度だけ試す
+        await fetchData({ silent: true });
+        body.sha = currentSha;
+        const retry = await fetch(API_BASE, {
+          method: "PUT",
+          headers: { ...authHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!retry.ok) throw new Error("競合が解消できませんでした。もう一度操作してください。");
+        const retryJson = await retry.json();
+        currentSha = retryJson.content.sha;
+        lastKnownJson = JSON.stringify({ categories: next }, null, 2);
+        return;
+      }
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.message || `保存に失敗しました(${res.status})`);
+      }
+      const resJson = await res.json();
+      currentSha = resJson.content.sha;
+      lastKnownJson = JSON.stringify({ categories: next }, null, 2);
+    }
+
+    async function saveCategories(next) {
+      categories = next;
       render();
-    }, (err) => {
-      setSync("接続エラー: " + (err?.message || err), true);
-    });
+      try {
+        await pushData(next);
+        setSync("保存しました", false);
+      } catch (e) {
+        setSync("保存に失敗しました: " + (e?.message || e), true);
+      }
+    }
+
+    setSync("接続中...", false);
+    fetchData();
+    setInterval(() => fetchData({ silent: true }), POLL_INTERVAL_MS);
 
     function render() {
       const total = categories.length;
