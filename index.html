@@ -470,7 +470,8 @@
     let editingItem = null; // { catId, itemId } | null
     let currentSha = null;
     let lastKnownJson = null;
-    let currentTab = "home";
+    const VALID_TABS = ["home", "gear", "campsite", "calendar", "weather", "news", "gallery"];
+    let currentTab = VALID_TABS.includes(localStorage.getItem("cg_current_tab")) ? localStorage.getItem("cg_current_tab") : "home";
 
     function uid(prefix) {
       return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -1743,6 +1744,7 @@
       document.querySelectorAll("[data-tab]").forEach(btn => {
         btn.addEventListener("click", () => {
           currentTab = btn.getAttribute("data-tab");
+          localStorage.setItem("cg_current_tab", currentTab);
           renderTabs();
         });
       });
