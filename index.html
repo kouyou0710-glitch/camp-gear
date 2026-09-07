@@ -252,6 +252,29 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .gallery-grid.mini { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+
+  .lightbox {
+    position: fixed; inset: 0; background: rgba(20, 20, 16, 0.9); display: none;
+    align-items: center; justify-content: center; flex-direction: column; z-index: 1000; padding: 20px;
+  }
+  .lightbox.open { display: flex; }
+  .lightbox img { max-width: 92vw; max-height: 78vh; border-radius: 8px; object-fit: contain; }
+  .lightbox-caption { color: #EFEADA; font-size: 14px; margin-top: 12px; text-align: center; padding: 0 12px; }
+  .lightbox-close {
+    position: absolute; top: 16px; right: 16px; width: 36px; height: 36px; border-radius: 50%;
+    background: rgba(255,255,255,0.15); color: #fff; border: none; font-size: 16px; cursor: pointer;
+  }
+
+  .gallery-pending-badge {
+    position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(240,238,227,0.9); color: #7A5A1E; font-size: 10.5px; text-align: center; padding: 6px; gap: 4px;
+  }
+  .gallery-item.pending img { opacity: 0.15; }
+  .gallery-item.pending .gallery-pending-badge { display: flex; }
+  .gallery-item.pending-failed .gallery-pending-badge { color: #A24A2A; }
+
+  .dash-slideshow { width: 100%; aspect-ratio: 4/3; border-radius: 10px; overflow: hidden; margin-top: 6px; background: #E1DDCB; }
+  .dash-slideshow img { width: 100%; height: 100%; object-fit: cover; display: block; }
 </style>
 </head>
 <body>
@@ -369,6 +392,12 @@
     <p style="text-align:center; margin-top:18px;">
       <a href="#" onclick="window.resetToken(); return false;" style="font-size:12px; color:#8B8672;">トークンを再設定する</a>
     </p>
+  </div>
+
+  <div id="lightbox" class="lightbox" onclick="window.closeLightbox()">
+    <img id="lightboxImg" src="" onclick="event.stopPropagation()" />
+    <div id="lightboxCaption" class="lightbox-caption"></div>
+    <button class="lightbox-close" onclick="window.closeLightbox()" aria-label="閉じる">✕</button>
   </div>
 
   <script type="module">
@@ -774,9 +803,14 @@
 
     function renderPhotoThumb(p) {
       const linkedEvent = events.find(e => e.id === p.eventId);
+      const captionEsc = escapeHtml(p.caption || "");
       return `
         <div class="gallery-item">
-          <img src="${escapeHtml(p.path)}" alt="${escapeHtml(p.caption || "キャンプの写真")}" loading="lazy" />
+          <img src="${escapeHtml(p.path)}" alt="${escapeHtml(p.caption || "キャンプの写真")}" loading="lazy"
+               onclick="window.openLightbox('${escapeHtml(p.path)}', '${captionEsc.replace(/'/g, "&#39;")}')"
+               onerror="window.__photoRetry(this)"
+               onload="this.closest('.gallery-item').classList.remove('pending','pending-failed')" />
+          <div class="gallery-pending-badge"><span>📷</span><span>反映中...</span></div>
           <div class="gallery-item-actions">
             <button data-photo-caption="${p.id}" aria-label="キャプション編集">✎</button>
             <button data-photo-remove="${p.id}" aria-label="削除">✕</button>
@@ -786,6 +820,53 @@
         </div>
       `;
     }
+
+    // ===== 写真ライトボックス =====
+    window.openLightbox = function (path, caption) {
+      const box = document.getElementById("lightbox");
+      const img = document.getElementById("lightboxImg");
+      const cap = document.getElementById("lightboxCaption");
+      img.src = path;
+      cap.textContent = caption || "";
+      box.classList.add("open");
+    };
+    window.closeLightbox = function () {
+      document.getElementById("lightbox").classList.remove("open");
+    };
+
+    // ===== 写真がまだGitHub Pagesに反映されていない場合、自動で数回リトライする =====
+    window.__photoRetry = function (imgEl) {
+      const item = imgEl.closest(".gallery-item");
+      if (item) item.classList.add("pending");
+      const attempts = Number(imgEl.dataset.attempts || "0");
+      if (attempts >= 8) {
+        if (item) item.classList.add("pending-failed");
+        if (item) item.querySelector(".gallery-pending-badge span:last-child").textContent = "読み込めません。再読み込みしてください";
+        return;
+      }
+      imgEl.dataset.attempts = String(attempts + 1);
+      setTimeout(() => {
+        const base = imgEl.getAttribute("src").split("?")[0];
+        imgEl.src = `${base}?v=${Date.now()}`;
+      }, 8000);
+    };
+
+    // ===== ダッシュボードの思い出スライドショー =====
+    let dashboardSlideIndex = 0;
+    function updateDashboardSlide() {
+      const img = document.getElementById("dashSlideImg");
+      if (!img || !photos || photos.length === 0) return;
+      const p = photos[dashboardSlideIndex % photos.length];
+      img.src = p.path;
+      img.alt = p.caption || "キャンプの写真";
+      const cap = document.getElementById("dashSlideCaption");
+      if (cap) cap.textContent = p.caption || "";
+    }
+    setInterval(() => {
+      if (!photos || photos.length === 0) return;
+      dashboardSlideIndex = (dashboardSlideIndex + 1) % photos.length;
+      updateDashboardSlide();
+    }, 4000);
 
     setSync("接続中...", false);
     fetchData();
@@ -928,7 +1009,10 @@
     function renderEvents() {
       const listEl = document.getElementById("eventList");
       if (!listEl) return;
-      const base = calendarSelectedDate ? events.filter(e => dateInEventRange(calendarSelectedDate, e)) : events;
+      const todayIso = toIsoDate(new Date());
+      const base = calendarSelectedDate
+        ? events.filter(e => dateInEventRange(calendarSelectedDate, e))
+        : events.filter(e => eventRange(e)[1] >= todayIso);
       const sorted = [...base].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
 
       if (sorted.length === 0) {
@@ -1509,6 +1593,16 @@
           <div class="dash-card-label">最新ニュース</div>
           ${newsHtml}
         </div>
+        ${photos.length > 0 ? `
+          <div class="dash-card">
+            <div class="dash-card-label">思い出フォトスライドショー</div>
+            <div class="dash-slideshow">
+              <img id="dashSlideImg" src="${escapeHtml(photos[dashboardSlideIndex % photos.length].path)}"
+                   alt="キャンプの写真" onclick="window.openLightbox(this.src, document.getElementById('dashSlideCaption').textContent)" />
+            </div>
+            <div class="dash-card-sub" id="dashSlideCaption">${escapeHtml(photos[dashboardSlideIndex % photos.length].caption || "")}</div>
+          </div>
+        ` : ""}
       `;
     }
 
