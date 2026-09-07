@@ -51,15 +51,7 @@
       "decidedId": null
     }
   ],
-  "events": [
-    {
-      "id": "event-1788779294316-1841",
-      "title": "道志の村キャンプ",
-      "date": "2026-09-21",
-      "memo": "",
-      "todos": []
-    }
-  ],
+  "events": [],
   "standaloneTodos": [],
   "campsites": {
     "items": [
