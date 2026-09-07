@@ -108,6 +108,57 @@
     flex-shrink: 0; width: 40px; border-radius: 8px; background: #C1592B; color: #fff; border: none;
     cursor: pointer; font-size: 18px;
   }
+
+  .tabs { display: flex; gap: 6px; margin: 4px 0 18px; border-bottom: 1px solid #E1DDCB; }
+  .tab-btn {
+    flex: 1; background: none; border: none; padding: 10px 4px; font-size: 13px; font-weight: 600;
+    color: #8B8672; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tab-btn.active { color: #1F3A2E; border-bottom-color: #1F3A2E; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .section-title { font-size: 15px; font-weight: 700; color: #1F3A2E; margin: 18px 0 10px; }
+  .section-title:first-child { margin-top: 0; }
+
+  .event-card { background: #FBFAF4; border: 1px solid #E1DDCB; border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
+  .event-header {
+    width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px 12px;
+    background: none; border: none; text-align: left; cursor: pointer; font-size: 14px;
+  }
+  .event-date {
+    flex-shrink: 0; width: 46px; text-align: center; font-weight: 700; color: #1F3A2E;
+    background: #EADFC0; border-radius: 8px; padding: 4px 2px; font-size: 12px; line-height: 1.2;
+  }
+  .event-date .d { font-size: 16px; display: block; }
+  .event-title-wrap { flex: 1; min-width: 0; }
+  .event-title { font-weight: 600; color: #26241F; }
+  .event-memo-preview { font-size: 12px; color: #8B8672; margin-top: 2px; }
+  .event-todo-count { font-size: 11px; color: #7A5A1E; flex-shrink: 0; }
+
+  .event-body { padding: 4px 12px 14px; border-top: 1px solid #EFEBDC; display: none; }
+  .event-body.open { display: block; }
+
+  .todo-row { display: flex; align-items: flex-start; gap: 8px; padding: 7px 2px; border-bottom: 1px solid #F0EEE3; }
+  .todo-row:last-of-type { border-bottom: none; }
+  .todo-check {
+    width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid #C7C2AC; background: #fff;
+    flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center;
+    color: #fff; padding: 0; cursor: pointer; font-size: 11px;
+  }
+  .todo-row.done .todo-check { background: #1F3A2E; border-color: #1F3A2E; }
+  .todo-text { flex: 1; font-size: 13.5px; }
+  .todo-row.done .todo-text { color: #A9A48E; text-decoration: line-through; }
+
+  .add-todo-form, .add-event-form { display: flex; gap: 8px; margin-top: 10px; }
+  .add-todo-form input, .add-event-form input { flex: 1; border: 1px solid #D9D4BE; border-radius: 8px; padding: 9px 12px; font-size: 13.5px; background: #fff; }
+  .add-todo-form input:focus, .add-event-form input:focus { outline: 2px solid #1F3A2E; outline-offset: 1px; }
+  .add-todo-btn, .add-event-btn { flex-shrink: 0; width: 38px; border-radius: 8px; background: #C1592B; color: #fff; border: none; cursor: pointer; font-size: 16px; }
+
+  .event-new-form { background: #FBFAF4; border: 1px solid #E1DDCB; border-radius: 12px; padding: 12px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 7px; }
+  .event-new-form input, .event-new-form textarea { width: 100%; border: 1px solid #E1DDCB; border-radius: 7px; padding: 8px 10px; font-size: 13.5px; background: #fff; font-family: inherit; }
+  .event-new-form .field-row { display: flex; gap: 7px; }
+  .event-new-form .field-date { flex: 0 0 46%; }
 </style>
 </head>
 <body>
@@ -143,12 +194,33 @@
     </div>
     <div class="sync-status" id="syncStatus">接続中...</div>
 
-    <div id="categoryList"></div>
+    <div class="tabs">
+      <button class="tab-btn" data-tab="gear">ギア選定</button>
+      <button class="tab-btn" data-tab="calendar">カレンダー</button>
+    </div>
 
-    <form class="add-category-form" id="addCategoryForm">
-      <input id="newCategoryInput" placeholder="カテゴリを追加(例:焚き火台)" />
-      <button type="submit" class="add-category-btn" aria-label="カテゴリを追加">+</button>
-    </form>
+    <div class="tab-panel" data-panel="gear">
+      <div id="categoryList"></div>
+
+      <form class="add-category-form" id="addCategoryForm">
+        <input id="newCategoryInput" placeholder="カテゴリを追加(例:焚き火台)" />
+        <button type="submit" class="add-category-btn" aria-label="カテゴリを追加">+</button>
+      </form>
+    </div>
+
+    <div class="tab-panel" data-panel="calendar">
+      <div class="section-title">今後の予定</div>
+      <div id="eventList"></div>
+      <div id="eventFormArea"></div>
+
+      <div class="section-title">単独Todo</div>
+      <div id="standaloneTodoList"></div>
+      <form class="add-todo-form" id="addStandaloneTodoForm">
+        <input id="newStandaloneTodoInput" placeholder="やることを入力(例:保険証コピー)" />
+        <button type="submit" class="add-todo-btn" aria-label="Todoを追加">+</button>
+      </form>
+    </div>
+
     <p style="text-align:center; margin-top:18px;">
       <a href="#" onclick="window.resetToken(); return false;" style="font-size:12px; color:#8B8672;">トークンを再設定する</a>
     </p>
@@ -192,11 +264,15 @@
     ];
 
     let categories = [];
+    let events = [];           // { id, title, date, memo, todos: [{id,text,done}] }
+    let standaloneTodos = [];  // { id, text, done }
     let openIds = new Set();
+    let openEventIds = new Set();
     let addingFormOpenFor = null;
     let editingItem = null; // { catId, itemId } | null
     let currentSha = null;
     let lastKnownJson = null;
+    let currentTab = "gear";
 
     function uid(prefix) {
       return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -230,8 +306,10 @@
         const res = await fetch(`${API_BASE}?ref=${BRANCH}&t=${Date.now()}`, { headers: authHeaders() });
         if (res.status === 404) {
           categories = DEFAULT_CATEGORIES;
+          events = [];
+          standaloneTodos = [];
           currentSha = null;
-          await pushData(categories, "init data.json");
+          await commitState("init data.json");
           return;
         }
         if (!res.ok) {
@@ -245,6 +323,8 @@
           lastKnownJson = text;
           const parsed = JSON.parse(text);
           categories = Array.isArray(parsed.categories) ? parsed.categories : [];
+          events = Array.isArray(parsed.events) ? parsed.events : [];
+          standaloneTodos = Array.isArray(parsed.standaloneTodos) ? parsed.standaloneTodos : [];
           render();
         }
         setSync("同期済み", false);
@@ -253,14 +333,15 @@
       }
     }
 
-    // データファイルをGitHubに書き込む(コミット)
-    async function pushData(next, message) {
+    // データファイルをGitHubに書き込む(コミット)。現在のcategories/events/standaloneTodosをまとめて保存する
+    async function commitState(message) {
       const body = {
         message: message || "update camp gear board",
-        content: utf8ToBase64(JSON.stringify({ categories: next }, null, 2)),
+        content: utf8ToBase64(JSON.stringify({ categories, events, standaloneTodos }, null, 2)),
         branch: BRANCH,
       };
       if (currentSha) body.sha = currentSha;
+      const snapshot = { categories, events, standaloneTodos };
 
       const res = await fetch(API_BASE, {
         method: "PUT",
@@ -280,7 +361,12 @@
         if (!retry.ok) throw new Error("競合が解消できませんでした。もう一度操作してください。");
         const retryJson = await retry.json();
         currentSha = retryJson.content.sha;
-        lastKnownJson = JSON.stringify({ categories: next }, null, 2);
+        // 自分が保存しようとしていた内容に戻す(fetchDataで上書きされた分を元に戻す)
+        categories = snapshot.categories;
+        events = snapshot.events;
+        standaloneTodos = snapshot.standaloneTodos;
+        lastKnownJson = JSON.stringify(snapshot, null, 2);
+        render();
         return;
       }
 
@@ -290,14 +376,36 @@
       }
       const resJson = await res.json();
       currentSha = resJson.content.sha;
-      lastKnownJson = JSON.stringify({ categories: next }, null, 2);
+      lastKnownJson = JSON.stringify(snapshot, null, 2);
     }
 
     async function saveCategories(next) {
       categories = next;
       render();
       try {
-        await pushData(next);
+        await commitState();
+        setSync("保存しました", false);
+      } catch (e) {
+        setSync("保存に失敗しました: " + (e?.message || e), true);
+      }
+    }
+
+    async function saveEvents(next) {
+      events = next;
+      render();
+      try {
+        await commitState();
+        setSync("保存しました", false);
+      } catch (e) {
+        setSync("保存に失敗しました: " + (e?.message || e), true);
+      }
+    }
+
+    async function saveStandaloneTodos(next) {
+      standaloneTodos = next;
+      render();
+      try {
+        await commitState();
         setSync("保存しました", false);
       } catch (e) {
         setSync("保存に失敗しました: " + (e?.message || e), true);
@@ -348,7 +456,101 @@
         list.appendChild(catEl);
       });
 
+      renderTabs();
+      renderEvents();
+      renderStandaloneTodos();
       bindEvents();
+    }
+
+    function renderTabs() {
+      document.querySelectorAll(".tab-btn").forEach(btn => {
+        btn.classList.toggle("active", btn.getAttribute("data-tab") === currentTab);
+      });
+      document.querySelectorAll(".tab-panel").forEach(panel => {
+        panel.classList.toggle("active", panel.getAttribute("data-panel") === currentTab);
+      });
+    }
+
+    function formatDateShort(iso) {
+      if (!iso) return { m: "-", d: "-" };
+      const [y, m, d] = iso.split("-");
+      return { m: `${Number(m)}月`, d: Number(d) };
+    }
+
+    function renderEvents() {
+      const listEl = document.getElementById("eventList");
+      if (!listEl) return;
+      const sorted = [...events].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+
+      if (sorted.length === 0) {
+        listEl.innerHTML = `<p class="empty-note">予定がまだありません。下の「+」から追加しましょう。</p>`;
+      } else {
+        listEl.innerHTML = sorted.map(ev => {
+          const isOpen = openEventIds.has(ev.id);
+          const { m, d } = formatDateShort(ev.date);
+          const doneCount = (ev.todos || []).filter(t => t.done).length;
+          const totalCount = (ev.todos || []).length;
+          return `
+            <div class="event-card">
+              <button class="event-header" data-event-toggle="${ev.id}">
+                <span class="event-date"><span class="d">${d}</span>${m}</span>
+                <span class="event-title-wrap">
+                  <span class="event-title">${escapeHtml(ev.title)}</span>
+                  ${ev.memo ? `<div class="event-memo-preview">${escapeHtml(ev.memo)}</div>` : ""}
+                </span>
+                ${totalCount > 0 ? `<span class="event-todo-count">${doneCount}/${totalCount}</span>` : ""}
+                <button class="category-delete" data-event-delete="${ev.id}" aria-label="削除">✕</button>
+              </button>
+              <div class="event-body ${isOpen ? "open" : ""}">
+                ${(ev.todos || []).length === 0 ? `<p class="empty-note">このイベントのtodoはまだありません。</p>` : ""}
+                ${(ev.todos || []).map(t => renderTodoRow(t, "event", ev.id)).join("")}
+                <form class="add-todo-form" data-event-todo-form="${ev.id}">
+                  <input placeholder="todoを追加(例:サイト予約確認)" data-todo-input />
+                  <button type="submit" class="add-todo-btn" aria-label="追加">+</button>
+                </form>
+              </div>
+            </div>
+          `;
+        }).join("");
+      }
+
+      const formArea = document.getElementById("eventFormArea");
+      if (formArea) {
+        formArea.innerHTML = `
+          <form class="event-new-form" id="newEventForm">
+            <input placeholder="予定のタイトル(例:〇〇キャンプ場)" id="newEventTitle" />
+            <div class="field-row">
+              <input type="date" class="field-date" id="newEventDate" />
+              <input placeholder="メモ(任意)" id="newEventMemo" />
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">予定を追加</button>
+            </div>
+          </form>
+        `;
+      }
+    }
+
+    function renderTodoRow(todo, kind, parentId) {
+      const attr = kind === "event" ? `data-event-todo-toggle="${parentId}|${todo.id}"` : `data-standalone-todo-toggle="${todo.id}"`;
+      const delAttr = kind === "event" ? `data-event-todo-remove="${parentId}|${todo.id}"` : `data-standalone-todo-remove="${todo.id}"`;
+      return `
+        <div class="todo-row ${todo.done ? "done" : ""}">
+          <button class="todo-check" ${attr}>${todo.done ? "✓" : ""}</button>
+          <span class="todo-text">${escapeHtml(todo.text)}</span>
+          <button class="row-remove" ${delAttr}>✕</button>
+        </div>
+      `;
+    }
+
+    function renderStandaloneTodos() {
+      const el = document.getElementById("standaloneTodoList");
+      if (!el) return;
+      if (standaloneTodos.length === 0) {
+        el.innerHTML = `<p class="empty-note">単独todoはまだありません。</p>`;
+      } else {
+        el.innerHTML = standaloneTodos.map(t => renderTodoRow(t, "standalone")).join("");
+      }
     }
 
     function renderCandidate(cat, item) {
@@ -482,6 +684,106 @@
           );
           saveCategories(next);
         });
+      });
+
+      // ===== タブ切り替え =====
+      document.querySelectorAll("[data-tab]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          currentTab = btn.getAttribute("data-tab");
+          renderTabs();
+        });
+      });
+
+      // ===== カレンダー: イベントの開閉・削除 =====
+      document.querySelectorAll("[data-event-toggle]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-event-toggle");
+          if (openEventIds.has(id)) openEventIds.delete(id); else openEventIds.add(id);
+          render();
+        });
+      });
+      document.querySelectorAll("[data-event-delete]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const id = btn.getAttribute("data-event-delete");
+          saveEvents(events.filter(ev => ev.id !== id));
+        });
+      });
+
+      // ===== カレンダー: 新規イベント追加 =====
+      const newEventForm = document.getElementById("newEventForm");
+      if (newEventForm) {
+        newEventForm.addEventListener("submit", (e) => {
+          e.preventDefault();
+          const title = document.getElementById("newEventTitle").value.trim();
+          if (!title) return;
+          const date = document.getElementById("newEventDate").value;
+          const memo = document.getElementById("newEventMemo").value.trim();
+          saveEvents([...events, { id: uid("event"), title, date, memo, todos: [] }]);
+        });
+      }
+
+      // ===== カレンダー: イベント内todoの追加 =====
+      document.querySelectorAll("[data-event-todo-form]").forEach(form => {
+        form.addEventListener("submit", (e) => {
+          e.preventDefault();
+          const eventId = form.getAttribute("data-event-todo-form");
+          const input = form.querySelector("[data-todo-input]");
+          const text = input.value.trim();
+          if (!text) return;
+          const next = events.map(ev =>
+            ev.id === eventId ? { ...ev, todos: [...(ev.todos || []), { id: uid("todo"), text, done: false }] } : ev
+          );
+          saveEvents(next);
+        });
+      });
+
+      // ===== カレンダー: イベント内todoの完了・削除 =====
+      document.querySelectorAll("[data-event-todo-toggle]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const [eventId, todoId] = btn.getAttribute("data-event-todo-toggle").split("|");
+          const next = events.map(ev =>
+            ev.id === eventId
+              ? { ...ev, todos: ev.todos.map(t => t.id === todoId ? { ...t, done: !t.done } : t) }
+              : ev
+          );
+          saveEvents(next);
+        });
+      });
+      document.querySelectorAll("[data-event-todo-remove]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const [eventId, todoId] = btn.getAttribute("data-event-todo-remove").split("|");
+          const next = events.map(ev =>
+            ev.id === eventId ? { ...ev, todos: ev.todos.filter(t => t.id !== todoId) } : ev
+          );
+          saveEvents(next);
+        });
+      });
+
+      // ===== 単独todo =====
+      document.querySelectorAll("[data-standalone-todo-toggle]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-standalone-todo-toggle");
+          saveStandaloneTodos(standaloneTodos.map(t => t.id === id ? { ...t, done: !t.done } : t));
+        });
+      });
+      document.querySelectorAll("[data-standalone-todo-remove]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-standalone-todo-remove");
+          saveStandaloneTodos(standaloneTodos.filter(t => t.id !== id));
+        });
+      });
+    }
+
+    const addStandaloneTodoForm = document.getElementById("addStandaloneTodoForm");
+    if (addStandaloneTodoForm) {
+      addStandaloneTodoForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const input = document.getElementById("newStandaloneTodoInput");
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = "";
+        saveStandaloneTodos([...standaloneTodos, { id: uid("todo"), text, done: false }]);
       });
     }
 
