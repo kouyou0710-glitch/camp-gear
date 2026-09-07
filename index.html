@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>キャンプギア選定ボード</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Hiragino Sans", "Yu Gothic", "Segoe UI", sans-serif;
+    background: #F0EEE3;
+    color: #26241F;
+    margin: 0;
+    padding: 20px 16px 60px;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  .hero {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 12px; margin-bottom: 4px;
+  }
+  .hero-title { font-size: 22px; font-weight: 700; color: #1F3A2E; margin: 0; line-height: 1.3; }
+  .hero-icon {
+    flex-shrink: 0; width: 38px; height: 38px; border-radius: 10px;
+    background: #1F3A2E; color: #F0EEE3; display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .progress-line { font-size: 13px; color: #5C5848; margin: 6px 0 20px; }
+  .progress-track { height: 6px; border-radius: 4px; background: #E1DDCB; margin-top: 6px; overflow: hidden; }
+  .progress-fill { height: 100%; background: #C1592B; border-radius: 4px; transition: width 0.3s ease; }
+  .sync-status { font-size: 12px; color: #8B8672; margin-bottom: 14px; }
+  .sync-status.err { color: #A24A2A; }
+
+  .category { background: #FBFAF4; border: 1px solid #E1DDCB; border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
+  .category-header {
+    width: 100%; display: flex; align-items: center; gap: 10px; padding: 13px 12px;
+    background: none; border: none; text-align: left; cursor: pointer; font-size: 15px;
+  }
+  .chevron { color: #8B8672; flex-shrink: 0; transition: transform 0.2s ease; display: inline-block; }
+  .chevron.open { transform: rotate(180deg); }
+  .category-name { flex: 1; font-weight: 600; color: #26241F; }
+  .category-delete { color: #B3AE99; padding: 4px; border-radius: 6px; background: none; border: none; cursor: pointer; }
+  .category-delete:hover { color: #C1592B; background: #F0EEE3; }
+
+  .badge { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px; display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; }
+  .badge-decided { background: #1F3A2E; color: #EFEADA; }
+  .badge-pending { background: #EADFC0; color: #7A5A1E; }
+  .badge-empty { background: #ECE9DC; color: #938F7C; }
+
+  .category-body { padding: 4px 12px 14px; border-top: 1px solid #EFEBDC; display: none; }
+  .category-body.open { display: block; }
+  .empty-note { font-size: 13px; color: #8B8672; margin: 10px 2px 12px; line-height: 1.5; }
+
+  .candidate { display: flex; gap: 10px; align-items: flex-start; padding: 10px 4px; border-bottom: 1px solid #F0EEE3; }
+  .candidate:last-of-type { border-bottom: none; }
+  .candidate.decided { background: #F3F6F1; margin: 0 -4px; padding: 10px 8px; border-radius: 8px; border-bottom: none; }
+
+  .decide-dot {
+    width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid #C7C2AC; background: #fff;
+    flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center;
+    color: #fff; padding: 0; cursor: pointer; font-size: 12px;
+  }
+  .candidate.decided .decide-dot { background: #1F3A2E; border-color: #1F3A2E; }
+
+  .candidate-body { flex: 1; min-width: 0; }
+  .candidate-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .candidate-name { font-size: 14px; font-weight: 600; color: #26241F; }
+  .candidate-price { font-size: 12.5px; color: #7A5A1E; flex-shrink: 0; white-space: nowrap; }
+  .candidate-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 3px; }
+  .candidate-memo { font-size: 12.5px; color: #8B8672; line-height: 1.4; }
+  .candidate-link { font-size: 12px; color: #C1592B; text-decoration: none; white-space: nowrap; }
+
+  .row-remove { background: none; border: none; color: #C7C2AC; padding: 2px; cursor: pointer; flex-shrink: 0; font-size: 14px; }
+  .row-remove:hover { color: #C1592B; }
+
+  .add-candidate-btn {
+    margin-top: 8px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 9px; border-radius: 8px; border: 1px dashed #C7C2AC; background: none; color: #5C5848;
+    font-size: 13px; cursor: pointer;
+  }
+  .add-candidate-btn:hover { background: #F0EEE3; }
+
+  .item-form { margin-top: 8px; background: #F5F3E9; border-radius: 10px; padding: 10px; display: none; flex-direction: column; gap: 7px; }
+  .item-form.open { display: flex; }
+  .field { width: 100%; border: 1px solid #E1DDCB; border-radius: 7px; padding: 8px 10px; font-size: 13.5px; background: #fff; color: #26241F; }
+  .field:focus { outline: 2px solid #1F3A2E; outline-offset: 1px; }
+  .field-row { display: flex; gap: 7px; }
+  .field-price { flex: 0 0 40%; }
+  .field-url { flex: 1; }
+  .form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px; }
+
+  .btn { border: none; border-radius: 7px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-primary { background: #1F3A2E; color: #EFEADA; }
+  .btn-ghost { background: none; color: #8B8672; }
+
+  .add-category-form { display: flex; gap: 8px; margin-top: 18px; }
+  .add-category-form input { flex: 1; border: 1px solid #D9D4BE; border-radius: 8px; padding: 10px 12px; font-size: 14px; background: #FBFAF4; }
+  .add-category-form input:focus { outline: 2px solid #1F3A2E; outline-offset: 1px; }
+  .add-category-btn {
+    flex-shrink: 0; width: 40px; border-radius: 8px; background: #C1592B; color: #fff; border: none;
+    cursor: pointer; font-size: 18px;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <h1 class="hero-title">キャンプギア選定ボード</h1>
+      <div class="hero-icon">▲</div>
+    </div>
+    <div class="progress-line" id="progressLine">
+      決定済み 0 / 0 カテゴリ
+      <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    </div>
+    <div class="sync-status" id="syncStatus">接続中...</div>
+
+    <div id="categoryList"></div>
+
+    <form class="add-category-form" id="addCategoryForm">
+      <input id="newCategoryInput" placeholder="カテゴリを追加(例:焚き火台)" />
+      <button type="submit" class="add-category-btn" aria-label="カテゴリを追加">+</button>
+    </form>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+    import {
+      getFirestore, doc, onSnapshot, setDoc
+    } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+    // ここをFirebaseコンソールからコピーした値に置き換え済み
+    const firebaseConfig = {
+      apiKey: "AIzaSyAw_02hpLaea51AZpVgO3h7180b5gJ5QKI",
+      authDomain: "camp-gear-1c6af.firebaseapp.com",
+      projectId: "camp-gear-1c6af",
+      storageBucket: "camp-gear-1c6af.firebasestorage.app",
+      messagingSenderId: "532946804284",
+      appId: "1:532946804284:web:763747640ac0364201ed39"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const boardRef = doc(db, "campGear", "board");
+
+    const DEFAULT_CATEGORIES = [
+      { id: "cat-tent", name: "テント", items: [], decidedId: null },
+      { id: "cat-sleep", name: "シュラフ(寝袋)", items: [], decidedId: null },
+      { id: "cat-mat", name: "マット", items: [], decidedId: null },
+      { id: "cat-pack", name: "バックパック", items: [], decidedId: null },
+      { id: "cat-cook", name: "クッカー・調理器具", items: [], decidedId: null },
+      { id: "cat-light", name: "ヘッドライト・ランタン", items: [], decidedId: null },
+      { id: "cat-furniture", name: "チェア・テーブル", items: [], decidedId: null },
+    ];
+
+    let categories = [];
+    let openIds = new Set();
+    let addingFormOpenFor = null;
+    let ready = false;
+
+    function uid(prefix) {
+      return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    }
+
+    async function saveCategories(next) {
+      categories = next;
+      render();
+      try {
+        await setDoc(boardRef, { categories: next, updatedAt: Date.now() });
+        setSync("同期済み", false);
+      } catch (e) {
+        setSync("保存に失敗しました: " + (e?.message || e), true);
+      }
+    }
+
+    function setSync(text, isErr) {
+      const el = document.getElementById("syncStatus");
+      el.textContent = text;
+      el.className = "sync-status" + (isErr ? " err" : "");
+    }
+
+    onSnapshot(boardRef, (snap) => {
+      if (snap.exists() && Array.isArray(snap.data().categories)) {
+        categories = snap.data().categories;
+      } else if (!ready) {
+        categories = DEFAULT_CATEGORIES;
+        setDoc(boardRef, { categories, updatedAt: Date.now() }).catch(() => {});
+      }
+      ready = true;
+      setSync("同期済み(リアルタイム)", false);
+      render();
+    }, (err) => {
+      setSync("接続エラー: " + (err?.message || err), true);
+    });
+
+    function render() {
+      const total = categories.length;
+      const decided = categories.filter(c => c.decidedId).length;
+      document.getElementById("progressLine").firstChild.textContent = `決定済み ${decided} / ${total} カテゴリ`;
+      document.getElementById("progressFill").style.width = total ? `${(decided / total) * 100}%` : "0%";
+
+      const list = document.getElementById("categoryList");
+      list.innerHTML = "";
+
+      categories.forEach((cat) => {
+        const isOpen = openIds.has(cat.id);
+        const decidedItem = cat.items.find(i => i.id === cat.decidedId);
+        const badge = decidedItem
+          ? `<span class="badge badge-decided">✓ 決定</span>`
+          : cat.items.length > 0
+            ? `<span class="badge badge-pending">検討中 ${cat.items.length}</span>`
+            : `<span class="badge badge-empty">未着手</span>`;
+
+        const catEl = document.createElement("div");
+        catEl.className = "category";
+        catEl.innerHTML = `
+          <button class="category-header" data-toggle="${cat.id}">
+            <span class="chevron ${isOpen ? "open" : ""}">▾</span>
+            <span class="category-name">${escapeHtml(cat.name)}</span>
+            ${badge}
+            <button class="category-delete" data-delete-cat="${cat.id}" aria-label="削除">✕</button>
+          </button>
+          <div class="category-body ${isOpen ? "open" : ""}">
+            ${cat.items.length === 0 ? `<p class="empty-note">まだ候補がありません。気になっているギアを追加してみましょう。</p>` : ""}
+            ${cat.items.map(item => renderCandidate(cat, item)).join("")}
+            ${addingFormOpenFor === cat.id ? renderForm(cat.id) : `<button class="add-candidate-btn" data-add-open="${cat.id}">+ 候補を追加</button>`}
+          </div>
+        `;
+        list.appendChild(catEl);
+      });
+
+      bindEvents();
+    }
+
+    function renderCandidate(cat, item) {
+      const isDecided = cat.decidedId === item.id;
+      return `
+        <div class="candidate ${isDecided ? "decided" : ""}">
+          <button class="decide-dot" data-decide="${cat.id}|${item.id}">${isDecided ? "✓" : ""}</button>
+          <div class="candidate-body">
+            <div class="candidate-top">
+              <span class="candidate-name">${escapeHtml(item.name)}</span>
+              ${item.price ? `<span class="candidate-price">${escapeHtml(item.price)}</span>` : ""}
+            </div>
+            ${(item.memo || item.url) ? `
+              <div class="candidate-meta">
+                ${item.memo ? `<span class="candidate-memo">${escapeHtml(item.memo)}</span>` : ""}
+                ${item.url ? `<a class="candidate-link" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">リンク</a>` : ""}
+              </div>` : ""}
+          </div>
+          <button class="row-remove" data-remove="${cat.id}|${item.id}">✕</button>
+        </div>
+      `;
+    }
+
+    function renderForm(catId) {
+      return `
+        <form class="item-form open" data-item-form="${catId}">
+          <input class="field field-name" placeholder="商品名(例:ニーモ タニ2P)" data-f="name" />
+          <div class="field-row">
+            <input class="field field-price" placeholder="価格(任意)" data-f="price" />
+            <input class="field field-url" placeholder="URL(任意)" data-f="url" />
+          </div>
+          <input class="field field-memo" placeholder="メモ(重さ、色、迷ってる理由など)" data-f="memo" />
+          <div class="form-actions">
+            <button type="button" class="btn btn-ghost" data-cancel-form="${catId}">キャンセル</button>
+            <button type="submit" class="btn btn-primary">候補に追加</button>
+          </div>
+        </form>
+      `;
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement("div");
+      div.textContent = str ?? "";
+      return div.innerHTML;
+    }
+
+    function bindEvents() {
+      document.querySelectorAll("[data-toggle]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-toggle");
+          if (openIds.has(id)) openIds.delete(id); else openIds.add(id);
+          render();
+        });
+      });
+      document.querySelectorAll("[data-delete-cat]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const id = btn.getAttribute("data-delete-cat");
+          saveCategories(categories.filter(c => c.id !== id));
+        });
+      });
+      document.querySelectorAll("[data-add-open]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          addingFormOpenFor = btn.getAttribute("data-add-open");
+          render();
+        });
+      });
+      document.querySelectorAll("[data-cancel-form]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          addingFormOpenFor = null;
+          render();
+        });
+      });
+      document.querySelectorAll("[data-item-form]").forEach(form => {
+        form.addEventListener("submit", (e) => {
+          e.preventDefault();
+          const catId = form.getAttribute("data-item-form");
+          const name = form.querySelector('[data-f="name"]').value.trim();
+          if (!name) return;
+          const price = form.querySelector('[data-f="price"]').value.trim();
+          const url = form.querySelector('[data-f="url"]').value.trim();
+          const memo = form.querySelector('[data-f="memo"]').value.trim();
+          const next = categories.map(c =>
+            c.id === catId ? { ...c, items: [...c.items, { id: uid("item"), name, price, url, memo }] } : c
+          );
+          addingFormOpenFor = null;
+          saveCategories(next);
+        });
+      });
+      document.querySelectorAll("[data-decide]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const [catId, itemId] = btn.getAttribute("data-decide").split("|");
+          const next = categories.map(c =>
+            c.id === catId ? { ...c, decidedId: c.decidedId === itemId ? null : itemId } : c
+          );
+          saveCategories(next);
+        });
+      });
+      document.querySelectorAll("[data-remove]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const [catId, itemId] = btn.getAttribute("data-remove").split("|");
+          const next = categories.map(c =>
+            c.id === catId
+              ? { ...c, items: c.items.filter(i => i.id !== itemId), decidedId: c.decidedId === itemId ? null : c.decidedId }
+              : c
+          );
+          saveCategories(next);
+        });
+      });
+    }
+
+    document.getElementById("addCategoryForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const input = document.getElementById("newCategoryInput");
+      const name = input.value.trim();
+      if (!name) return;
+      input.value = "";
+      saveCategories([...categories, { id: uid("cat"), name, items: [], decidedId: null }]);
+    });
+  </script>
+</body>
+</html>
