@@ -45,7 +45,11 @@
   .chevron { color: #8B8672; flex-shrink: 0; transition: transform 0.2s ease; display: inline-block; }
   .chevron.open { transform: rotate(180deg); }
   .category-name { flex: 1; font-weight: 600; color: #26241F; }
-  .category-delete { color: #B3AE99; padding: 4px; border-radius: 6px; background: none; border: none; cursor: pointer; }
+  .category-delete {
+    color: #8B8672; width: 30px; height: 30px; border-radius: 8px; background: #F0EEE3; border: none;
+    cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 15px;
+  }
+  .category-delete:hover, .category-delete:active { background: #F3E3DA; color: #C1592B; }
   .category-delete:hover { color: #C1592B; background: #F0EEE3; }
 
   .badge { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px; display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; }
@@ -62,9 +66,9 @@
   .candidate.decided { background: #F3F6F1; margin: 0 -4px; padding: 10px 8px; border-radius: 8px; border-bottom: none; }
 
   .decide-dot {
-    width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid #C7C2AC; background: #fff;
+    width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid #C7C2AC; background: #fff;
     flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center;
-    color: #fff; padding: 0; cursor: pointer; font-size: 12px;
+    color: #fff; padding: 0; cursor: pointer; font-size: 13px;
   }
   .candidate.decided .decide-dot { background: #1F3A2E; border-color: #1F3A2E; }
 
@@ -76,10 +80,13 @@
   .candidate-memo { font-size: 12.5px; color: #8B8672; line-height: 1.4; }
   .candidate-link { font-size: 12px; color: #C1592B; text-decoration: none; white-space: nowrap; }
 
-  .row-remove { background: none; border: none; color: #C7C2AC; padding: 2px; cursor: pointer; flex-shrink: 0; font-size: 14px; }
-  .row-remove:hover { color: #C1592B; }
-  .row-edit { background: none; border: none; color: #C7C2AC; padding: 2px; cursor: pointer; flex-shrink: 0; font-size: 14px; }
-  .row-edit:hover { color: #1F3A2E; }
+  .row-remove, .row-edit {
+    width: 30px; height: 30px; border-radius: 8px; background: #F0EEE3; border: none;
+    color: #5C5848; cursor: pointer; flex-shrink: 0; font-size: 15px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .row-remove:hover, .row-remove:active { background: #F3E3DA; color: #C1592B; }
+  .row-edit:hover, .row-edit:active { background: #E1DDCB; color: #1F3A2E; }
 
   .add-candidate-btn {
     margin-top: 8px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -137,6 +144,7 @@
   .event-title-wrap { flex: 1; min-width: 0; }
   .event-title { font-weight: 600; color: #26241F; }
   .event-memo-preview { font-size: 12px; color: #8B8672; margin-top: 2px; }
+  .event-date-range { font-size: 11px; color: #7A5A1E; margin-top: 1px; }
   .event-todo-count { font-size: 11px; color: #7A5A1E; flex-shrink: 0; }
 
   .event-body { padding: 4px 12px 14px; border-top: 1px solid #EFEBDC; display: none; }
@@ -145,7 +153,7 @@
   .todo-row { display: flex; align-items: flex-start; gap: 8px; padding: 7px 2px; border-bottom: 1px solid #F0EEE3; }
   .todo-row:last-of-type { border-bottom: none; }
   .todo-check {
-    width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid #C7C2AC; background: #fff;
+    width: 22px; height: 22px; border-radius: 6px; border: 1.5px solid #C7C2AC; background: #fff;
     flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center;
     color: #fff; padding: 0; cursor: pointer; font-size: 11px;
   }
@@ -161,7 +169,8 @@
   .event-new-form { background: #FBFAF4; border: 1px solid #E1DDCB; border-radius: 12px; padding: 12px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 7px; }
   .event-new-form input, .event-new-form textarea { width: 100%; border: 1px solid #E1DDCB; border-radius: 7px; padding: 8px 10px; font-size: 13.5px; background: #fff; font-family: inherit; resize: vertical; }
   .event-new-form .field-row { display: flex; gap: 7px; }
-  .event-new-form .field-date { flex: 0 0 46%; }
+  .event-new-form .field-date { flex: 1; }
+  .event-new-form-hint { font-size: 11px; color: #8B8672; margin-top: -3px; }
 
   .weather-card { background: #FBFAF4; border: 1px solid #E1DDCB; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
   .weather-card-title { font-size: 13px; font-weight: 700; color: #1F3A2E; margin-bottom: 8px; }
@@ -618,6 +627,30 @@
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     }
 
+    function eventRange(ev) {
+      const start = ev.date || "";
+      const end = ev.endDate && ev.endDate >= start ? ev.endDate : start;
+      return [start, end];
+    }
+
+    function dateInEventRange(iso, ev) {
+      const [start, end] = eventRange(ev);
+      return !!start && iso >= start && iso <= end;
+    }
+
+    function shortDate(iso) {
+      if (!iso) return "";
+      const [, m, d] = iso.split("-");
+      return `${Number(m)}/${Number(d)}`;
+    }
+
+    function formatRangeLabel(ev) {
+      const [start, end] = eventRange(ev);
+      if (!start) return "";
+      if (start === end) return shortDate(start);
+      return `${shortDate(start)} 〜 ${shortDate(end)}`;
+    }
+
     function renderMonthCalendar() {
       const el = document.getElementById("monthCalendar");
       if (!el) return;
@@ -627,16 +660,16 @@
       const month = base.getMonth();
       const firstDay = new Date(year, month, 1).getDay();
       const daysInMonth = new Date(year, month + 1, 0).getDate();
-      const eventDates = new Set(events.map(e => e.date).filter(Boolean));
       const todayIso = toIsoDate(now);
 
       let cells = "";
       for (let i = 0; i < firstDay; i++) cells += `<div class="month-cal-day empty"></div>`;
       for (let d = 1; d <= daysInMonth; d++) {
         const iso = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+        const hasEvent = events.some(ev => dateInEventRange(iso, ev));
         const cls = [
           "month-cal-day",
-          eventDates.has(iso) ? "has-event" : "",
+          hasEvent ? "has-event" : "",
           iso === todayIso ? "today" : "",
           iso === calendarSelectedDate ? "selected" : "",
         ].filter(Boolean).join(" ");
@@ -660,7 +693,7 @@
     function renderEvents() {
       const listEl = document.getElementById("eventList");
       if (!listEl) return;
-      const base = calendarSelectedDate ? events.filter(e => e.date === calendarSelectedDate) : events;
+      const base = calendarSelectedDate ? events.filter(e => dateInEventRange(calendarSelectedDate, e)) : events;
       const sorted = [...base].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
 
       if (sorted.length === 0) {
@@ -675,9 +708,11 @@
           return `
             <div class="event-card">
               <button class="event-header" data-event-toggle="${ev.id}">
+                <span class="chevron ${isOpen ? "open" : ""}">▾</span>
                 <span class="event-date"><span class="d">${d}</span>${m}</span>
                 <span class="event-title-wrap">
                   <span class="event-title">${escapeHtml(ev.title)}</span>
+                  <div class="event-date-range">${formatRangeLabel(ev)}</div>
                   ${ev.memo ? `<div class="event-memo-preview">${escapeHtml(ev.memo)}</div>` : ""}
                 </span>
                 ${totalCount > 0 ? `<span class="event-todo-count">${doneCount}/${totalCount}</span>` : ""}
@@ -720,9 +755,11 @@
           <form class="event-new-form" id="newEventForm">
             <input placeholder="予定のタイトル(例:〇〇キャンプ場)" id="newEventTitle" />
             <div class="field-row">
-              <input type="date" class="field-date" id="newEventDate" />
-              <input placeholder="メモ(任意)" id="newEventMemo" />
+              <input type="date" class="field-date" id="newEventDate" title="開始日" />
+              <input type="date" class="field-date" id="newEventEndDate" title="終了日(任意)" />
             </div>
+            <div class="event-new-form-hint">開始日/終了日(日帰りなら終了日は空でOK)</div>
+            <input placeholder="メモ(任意)" id="newEventMemo" />
             <div class="form-actions">
               <button type="submit" class="btn btn-primary">予定を追加</button>
             </div>
@@ -1456,11 +1493,13 @@
           const title = document.getElementById("newEventTitle").value.trim();
           if (!title) return;
           const date = document.getElementById("newEventDate").value;
+          const endDateInput = document.getElementById("newEventEndDate").value;
+          const endDate = endDateInput && endDateInput >= date ? endDateInput : date;
           const memo = document.getElementById("newEventMemo").value.trim();
           const defaultTodos = DEFAULT_EVENT_TODOS.map(text => ({ id: uid("todo"), text, done: false }));
           const defaultPacking = DEFAULT_PACKING_ITEMS.map(text => ({ id: uid("pack"), text, done: false }));
           saveEvents([...events, {
-            id: uid("event"), title, date, memo,
+            id: uid("event"), title, date, endDate, memo,
             todos: defaultTodos, packingList: defaultPacking,
             meetingPoint: "", directions: "",
           }]);
