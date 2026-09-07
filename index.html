@@ -131,6 +131,14 @@
   .section-title { font-size: 15px; font-weight: 700; color: #1F3A2E; margin: 18px 0 10px; }
   .section-title:first-child { margin-top: 0; }
 
+  .section-toggle {
+    width: 100%; display: flex; align-items: center; gap: 8px; background: none; border: none;
+    padding: 10px 2px; font-size: 15px; font-weight: 700; color: #1F3A2E; cursor: pointer; margin-top: 8px;
+    border-top: 1px solid #E1DDCB;
+  }
+  .section-toggle-body { display: none; }
+  .section-toggle-body.open { display: block; }
+
   .event-card { background: #FBFAF4; border: 1px solid #E1DDCB; border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
   .event-header {
     width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px 12px;
@@ -145,6 +153,8 @@
   .event-title { font-weight: 600; color: #26241F; }
   .event-memo-preview { font-size: 12px; color: #8B8672; margin-top: 2px; }
   .event-date-range { font-size: 11px; color: #7A5A1E; margin-top: 1px; }
+  .event-actions-row { display: flex; gap: 8px; padding: 0 12px 10px; }
+  .event-actions-row .row-edit, .event-actions-row .row-remove { width: auto; height: 30px; padding: 0 12px; font-size: 12.5px; gap: 4px; }
   .event-todo-count { font-size: 11px; color: #7A5A1E; flex-shrink: 0; }
 
   .event-body { padding: 4px 12px 14px; border-top: 1px solid #EFEBDC; display: none; }
@@ -294,16 +304,21 @@
 
     <div class="tab-panel" data-panel="calendar">
       <div id="monthCalendar"></div>
+      <div id="eventFormArea"></div>
       <div class="section-title">今後の予定</div>
       <div id="eventList"></div>
-      <div id="eventFormArea"></div>
 
-      <div class="section-title">単独Todo</div>
-      <div id="standaloneTodoList"></div>
-      <form class="add-todo-form" id="addStandaloneTodoForm">
-        <input id="newStandaloneTodoInput" placeholder="やることを入力(例:保険証コピー)" />
-        <button type="submit" class="add-todo-btn" aria-label="Todoを追加">+</button>
-      </form>
+      <button class="section-toggle" id="standaloneTodoToggle">
+        <span class="chevron" id="standaloneTodoChevron">▾</span>
+        単独Todo
+      </button>
+      <div id="standaloneTodoBody" class="section-toggle-body">
+        <div id="standaloneTodoList"></div>
+        <form class="add-todo-form" id="addStandaloneTodoForm">
+          <input id="newStandaloneTodoInput" placeholder="やることを入力(例:保険証コピー)" />
+          <button type="submit" class="add-todo-btn" aria-label="Todoを追加">+</button>
+        </form>
+      </div>
     </div>
 
     <div class="tab-panel" data-panel="weather">
@@ -378,6 +393,9 @@
     let openEventIds = new Set();
     let calendarMonthOffset = 0;
     let calendarSelectedDate = null;
+    let eventAddOpen = false;
+    let editingEventId = null;
+    let standaloneTodoOpen = false;
     let addingFormOpenFor = null;
     let editingItem = null; // { catId, itemId } | null
     let currentSha = null;
@@ -697,9 +715,11 @@
       const sorted = [...base].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
 
       if (sorted.length === 0) {
-        listEl.innerHTML = `<p class="empty-note">${calendarSelectedDate ? "この日の予定はありません。" : "予定がまだありません。下の「+」から追加しましょう。"}</p>`;
+        listEl.innerHTML = `<p class="empty-note">${calendarSelectedDate ? "この日の予定はありません。" : "予定がまだありません。上の「+ 予定を追加」から追加しましょう。"}</p>`;
       } else {
         listEl.innerHTML = sorted.map(ev => {
+          if (editingEventId === ev.id) return renderEventEditForm(ev);
+
           const isOpen = openEventIds.has(ev.id);
           const { m, d } = formatDateShort(ev.date);
           const packingList = ev.packingList || [];
@@ -716,8 +736,11 @@
                   ${ev.memo ? `<div class="event-memo-preview">${escapeHtml(ev.memo)}</div>` : ""}
                 </span>
                 ${totalCount > 0 ? `<span class="event-todo-count">${doneCount}/${totalCount}</span>` : ""}
-                <button class="category-delete" data-event-delete="${ev.id}" aria-label="削除">✕</button>
               </button>
+              <div class="event-actions-row">
+                <button class="row-edit" data-event-edit="${ev.id}" aria-label="編集">✎ 編集</button>
+                <button class="row-remove" data-event-delete="${ev.id}" aria-label="削除">✕ 削除</button>
+              </div>
               <div class="event-body ${isOpen ? "open" : ""}">
                 <div class="section-title" style="margin-top:0;">Todo</div>
                 ${(ev.todos || []).length === 0 ? `<p class="empty-note">このイベントのtodoはまだありません。</p>` : ""}
@@ -751,7 +774,7 @@
 
       const formArea = document.getElementById("eventFormArea");
       if (formArea) {
-        formArea.innerHTML = `
+        formArea.innerHTML = eventAddOpen ? `
           <form class="event-new-form" id="newEventForm">
             <input placeholder="予定のタイトル(例:〇〇キャンプ場)" id="newEventTitle" />
             <div class="field-row">
@@ -761,11 +784,29 @@
             <div class="event-new-form-hint">開始日/終了日(日帰りなら終了日は空でOK)</div>
             <input placeholder="メモ(任意)" id="newEventMemo" />
             <div class="form-actions">
+              <button type="button" class="btn btn-ghost" id="eventAddCancelBtn">キャンセル</button>
               <button type="submit" class="btn btn-primary">予定を追加</button>
             </div>
           </form>
-        `;
+        ` : `<button class="add-candidate-btn" id="eventAddOpenBtn">+ 予定を追加</button>`;
       }
+    }
+
+    function renderEventEditForm(ev) {
+      return `
+        <form class="event-new-form" data-edit-event-form="${ev.id}" style="margin-bottom:10px;">
+          <input placeholder="予定のタイトル" data-ef="title" value="${escapeHtml(ev.title)}" />
+          <div class="field-row">
+            <input type="date" class="field-date" data-ef="date" value="${escapeHtml(ev.date || "")}" title="開始日" />
+            <input type="date" class="field-date" data-ef="endDate" value="${escapeHtml(ev.endDate || ev.date || "")}" title="終了日" />
+          </div>
+          <input placeholder="メモ(任意)" data-ef="memo" value="${escapeHtml(ev.memo || "")}" />
+          <div class="form-actions">
+            <button type="button" class="btn btn-ghost" id="eventEditCancelBtn">キャンセル</button>
+            <button type="submit" class="btn btn-primary">保存</button>
+          </div>
+        </form>
+      `;
     }
 
     function renderTodoRow(todo, kind, parentId) {
@@ -797,6 +838,10 @@
       } else {
         el.innerHTML = standaloneTodos.map(t => renderTodoRow(t, "standalone")).join("");
       }
+      const body = document.getElementById("standaloneTodoBody");
+      const chevron = document.getElementById("standaloneTodoChevron");
+      if (body) body.classList.toggle("open", standaloneTodoOpen);
+      if (chevron) chevron.classList.toggle("open", standaloneTodoOpen);
     }
 
     function renderCampsites() {
@@ -1469,7 +1514,7 @@
         });
       }
 
-      // ===== カレンダー: イベントの開閉・削除 =====
+      // ===== カレンダー: イベントの開閉・削除・編集 =====
       document.querySelectorAll("[data-event-toggle]").forEach(btn => {
         btn.addEventListener("click", () => {
           const id = btn.getAttribute("data-event-toggle");
@@ -1480,12 +1525,55 @@
       document.querySelectorAll("[data-event-delete]").forEach(btn => {
         btn.addEventListener("click", (e) => {
           e.stopPropagation();
+          if (!confirm("この予定を削除しますか?")) return;
           const id = btn.getAttribute("data-event-delete");
           saveEvents(events.filter(ev => ev.id !== id));
         });
       });
+      document.querySelectorAll("[data-event-edit]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          editingEventId = btn.getAttribute("data-event-edit");
+          render();
+        });
+      });
+      const eventEditCancelBtn = document.getElementById("eventEditCancelBtn");
+      if (eventEditCancelBtn) {
+        eventEditCancelBtn.addEventListener("click", () => {
+          editingEventId = null;
+          render();
+        });
+      }
+      document.querySelectorAll("[data-edit-event-form]").forEach(form => {
+        form.addEventListener("submit", (e) => {
+          e.preventDefault();
+          const id = form.getAttribute("data-edit-event-form");
+          const title = form.querySelector('[data-ef="title"]').value.trim();
+          if (!title) return;
+          const date = form.querySelector('[data-ef="date"]').value;
+          const endDateInput = form.querySelector('[data-ef="endDate"]').value;
+          const endDate = endDateInput && endDateInput >= date ? endDateInput : date;
+          const memo = form.querySelector('[data-ef="memo"]').value.trim();
+          const next = events.map(ev => ev.id === id ? { ...ev, title, date, endDate, memo } : ev);
+          editingEventId = null;
+          saveEvents(next);
+        });
+      });
 
-      // ===== カレンダー: 新規イベント追加 =====
+      // ===== カレンダー: 新規イベント追加(折りたたみ) =====
+      const eventAddOpenBtn = document.getElementById("eventAddOpenBtn");
+      if (eventAddOpenBtn) {
+        eventAddOpenBtn.addEventListener("click", () => {
+          eventAddOpen = true;
+          render();
+        });
+      }
+      const eventAddCancelBtn = document.getElementById("eventAddCancelBtn");
+      if (eventAddCancelBtn) {
+        eventAddCancelBtn.addEventListener("click", () => {
+          eventAddOpen = false;
+          render();
+        });
+      }
       const newEventForm = document.getElementById("newEventForm");
       if (newEventForm) {
         newEventForm.addEventListener("submit", (e) => {
@@ -1498,6 +1586,7 @@
           const memo = document.getElementById("newEventMemo").value.trim();
           const defaultTodos = DEFAULT_EVENT_TODOS.map(text => ({ id: uid("todo"), text, done: false }));
           const defaultPacking = DEFAULT_PACKING_ITEMS.map(text => ({ id: uid("pack"), text, done: false }));
+          eventAddOpen = false;
           saveEvents([...events, {
             id: uid("event"), title, date, endDate, memo,
             todos: defaultTodos, packingList: defaultPacking,
@@ -1595,6 +1684,13 @@
       });
 
       // ===== 単独todo =====
+      const standaloneTodoToggle = document.getElementById("standaloneTodoToggle");
+      if (standaloneTodoToggle) {
+        standaloneTodoToggle.addEventListener("click", () => {
+          standaloneTodoOpen = !standaloneTodoOpen;
+          renderStandaloneTodos();
+        });
+      }
       document.querySelectorAll("[data-standalone-todo-toggle]").forEach(btn => {
         btn.addEventListener("click", () => {
           const id = btn.getAttribute("data-standalone-todo-toggle");
