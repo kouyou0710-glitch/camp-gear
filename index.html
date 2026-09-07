@@ -534,6 +534,31 @@
       };
     }
 
+    // ===== 写真(非公開リポジトリ)を認証付きで取得し、data URLとしてキャッシュする =====
+    const photoUrlCache = {}; // path -> data URL | "error"
+    const photoUrlPending = new Set();
+
+    function getPhotoSrc(path) {
+      if (photoUrlCache[path] && photoUrlCache[path] !== "error") return photoUrlCache[path];
+      if (!photoUrlPending.has(path)) ensurePhotoUrl(path);
+      return "";
+    }
+
+    async function ensurePhotoUrl(path) {
+      photoUrlPending.add(path);
+      try {
+        const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}?ref=${BRANCH}`;
+        const res = await fetch(url, { headers: authHeaders() });
+        if (!res.ok) throw new Error("写真の取得に失敗しました");
+        const data = await res.json();
+        photoUrlCache[path] = `data:image/jpeg;base64,${(data.content || "").replace(/\n/g, "")}`;
+      } catch (e) {
+        photoUrlCache[path] = "error";
+      }
+      photoUrlPending.delete(path);
+      render();
+    }
+
     function utf8ToBase64(str) {
       return btoa(unescape(encodeURIComponent(str)));
     }
@@ -883,13 +908,13 @@
     function renderPhotoThumb(p) {
       const linkedEvent = events.find(e => e.id === p.eventId);
       const captionEsc = escapeHtml(p.caption || "");
+      const src = getPhotoSrc(p.path);
+      const failed = photoUrlCache[p.path] === "error";
       return `
-        <div class="gallery-item">
-          <img src="${escapeHtml(p.path)}" alt="${escapeHtml(p.caption || "キャンプの写真")}" loading="lazy"
-               onclick="window.openLightbox('${escapeHtml(p.path)}', '${captionEsc.replace(/'/g, "&#39;")}')"
-               onerror="window.__photoRetry(this)"
-               onload="this.closest('.gallery-item').classList.remove('pending','pending-failed')" />
-          <div class="gallery-pending-badge"><span>📷</span><span>反映中...</span></div>
+        <div class="gallery-item ${!src ? "pending" : ""} ${failed ? "pending-failed" : ""}">
+          ${src ? `<img src="${src}" alt="${escapeHtml(p.caption || "キャンプの写真")}" loading="lazy"
+               onclick="window.openLightbox('${escapeHtml(p.path)}', '${captionEsc.replace(/'/g, "&#39;")}')" />` : ""}
+          <div class="gallery-pending-badge"><span>📷</span><span>${failed ? "読み込めません" : "読み込み中..."}</span></div>
           <div class="gallery-item-actions">
             <button data-photo-caption="${p.id}" aria-label="キャプション編集">✎</button>
             <button data-photo-remove="${p.id}" aria-label="削除">✕</button>
@@ -905,29 +930,12 @@
       const box = document.getElementById("lightbox");
       const img = document.getElementById("lightboxImg");
       const cap = document.getElementById("lightboxCaption");
-      img.src = path;
+      img.src = photoUrlCache[path] && photoUrlCache[path] !== "error" ? photoUrlCache[path] : "";
       cap.textContent = caption || "";
       box.classList.add("open");
     };
     window.closeLightbox = function () {
       document.getElementById("lightbox").classList.remove("open");
-    };
-
-    // ===== 写真がまだGitHub Pagesに反映されていない場合、自動で数回リトライする =====
-    window.__photoRetry = function (imgEl) {
-      const item = imgEl.closest(".gallery-item");
-      if (item) item.classList.add("pending");
-      const attempts = Number(imgEl.dataset.attempts || "0");
-      if (attempts >= 8) {
-        if (item) item.classList.add("pending-failed");
-        if (item) item.querySelector(".gallery-pending-badge span:last-child").textContent = "読み込めません。再読み込みしてください";
-        return;
-      }
-      imgEl.dataset.attempts = String(attempts + 1);
-      setTimeout(() => {
-        const base = imgEl.getAttribute("src").split("?")[0];
-        imgEl.src = `${base}?v=${Date.now()}`;
-      }, 8000);
     };
 
     // ===== ダッシュボードの思い出スライドショー =====
@@ -936,8 +944,10 @@
       const img = document.getElementById("dashSlideImg");
       if (!img || !photos || photos.length === 0) return;
       const p = photos[dashboardSlideIndex % photos.length];
-      img.src = p.path;
+      const src = getPhotoSrc(p.path);
+      if (src) img.src = src;
       img.alt = p.caption || "キャンプの写真";
+      img.setAttribute("data-photo-path", p.path);
       const cap = document.getElementById("dashSlideCaption");
       if (cap) cap.textContent = p.caption || "";
     }
@@ -1902,8 +1912,9 @@
           <div class="dash-card" data-goto-tab="gallery">
             <div class="dash-card-label">思い出フォトスライドショー</div>
             <div class="dash-slideshow">
-              <img id="dashSlideImg" src="${escapeHtml(photos[dashboardSlideIndex % photos.length].path)}"
-                   alt="キャンプの写真" onclick="event.stopPropagation(); window.openLightbox(this.src, document.getElementById('dashSlideCaption').textContent)" />
+              <img id="dashSlideImg" src="${escapeHtml(getPhotoSrc(photos[dashboardSlideIndex % photos.length].path))}"
+                   data-photo-path="${escapeHtml(photos[dashboardSlideIndex % photos.length].path)}"
+                   alt="キャンプの写真" onclick="event.stopPropagation(); window.openLightbox(this.getAttribute('data-photo-path'), document.getElementById('dashSlideCaption').textContent)" />
             </div>
             <div class="dash-card-sub" id="dashSlideCaption">${escapeHtml(photos[dashboardSlideIndex % photos.length].caption || "")}</div>
           </div>
