@@ -1279,9 +1279,9 @@
           <select id="campsiteSortSelect">
             <option value="default" ${campsiteSortMode === "default" ? "selected" : ""}>並び替え: 追加順</option>
             <option value="status" ${campsiteSortMode === "status" ? "selected" : ""}>並び替え: 評価別(行った→行きたい→無印)</option>
-            <option value="distance" ${campsiteSortMode === "distance" ? "selected" : ""}>並び替え: 自宅からの距離が近い順</option>
+            <option value="distance" ${campsiteSortMode === "distance" ? "selected" : ""}>並び替え: 自宅から近い順(運転距離)</option>
           </select>
-          ${!homeLocation ? `<p class="empty-note" style="margin-top:6px;">距離を表示するには、天気タブで自宅エリアを設定してください。</p>` : ""}
+          ${!homeLocation ? `<p class="empty-note" style="margin-top:6px;">距離を表示するには、天気タブで自宅エリアを設定してください。</p>` : `<p class="empty-note" style="margin-top:6px; font-size:10px;">ルート計算: OSRM / 地図データ: © OpenStreetMap contributors</p>`}
         </div>
       `;
 
@@ -1306,7 +1306,16 @@
       const distCache = siteDistanceCache[item.id];
       let distanceLabel = "";
       if (homeLocation && item.area) {
-        if (distCache?.km != null) distanceLabel = `自宅から約${Math.round(distCache.km)}km`;
+        if (distCache?.km != null) {
+          if (distCache.mode === "drive") {
+            const h = Math.floor(distCache.minutes / 60);
+            const m = Math.round(distCache.minutes % 60);
+            const timeStr = h > 0 ? `${h}時間${m}分` : `${m}分`;
+            distanceLabel = `🚗 約${Math.round(distCache.km)}km(${timeStr})`;
+          } else {
+            distanceLabel = `自宅から直線距離で約${Math.round(distCache.km)}km`;
+          }
+        }
         else if (distCache?.loading) distanceLabel = "距離を計算中...";
         else if (distCache?.error) distanceLabel = "";
       }
@@ -1411,6 +1420,16 @@
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
+    // OSRM(無料・キー不要の道路ルート計算サービス)で車移動距離・時間を取得
+    async function fetchDrivingDistance(lat1, lon1, lat2, lon2) {
+      const url = `https://router.project-osrm.org/route/v1/driving/${lon1},${lat1};${lon2},${lat2}?overview=false`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("道路距離の取得に失敗しました");
+      const json = await res.json();
+      if (json.code !== "Ok" || !json.routes || json.routes.length === 0) throw new Error("ルートが見つかりませんでした");
+      return { km: json.routes[0].distance / 1000, minutes: json.routes[0].duration / 60 };
+    }
+
     async function ensureSiteDistance(item) {
       if (!homeLocation || !item.area) return;
       const cache = siteDistanceCache[item.id] || {};
@@ -1419,8 +1438,14 @@
       siteDistanceCache[item.id] = { ...cache, loading: true, error: null };
       try {
         const geo = await geocodeAddress(item.area);
-        const km = haversineKm(homeLocation.lat, homeLocation.lon, geo.lat, geo.lon);
-        siteDistanceCache[item.id] = { key, km, loading: false, error: null };
+        try {
+          const drive = await fetchDrivingDistance(homeLocation.lat, homeLocation.lon, geo.lat, geo.lon);
+          siteDistanceCache[item.id] = { key, km: drive.km, minutes: drive.minutes, mode: "drive", loading: false, error: null };
+        } catch (driveErr) {
+          // 道路ルートが取得できない場合は直線距離にフォールバック
+          const km = haversineKm(homeLocation.lat, homeLocation.lon, geo.lat, geo.lon);
+          siteDistanceCache[item.id] = { key, km, minutes: null, mode: "straight", loading: false, error: null };
+        }
       } catch (e) {
         siteDistanceCache[item.id] = { key, km: null, loading: false, error: e?.message || String(e) };
       }
