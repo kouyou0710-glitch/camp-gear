@@ -1817,23 +1817,21 @@
       document.querySelectorAll("[data-cal-nav]").forEach(btn => {
         btn.addEventListener("click", () => {
           calendarMonthOffset += Number(btn.getAttribute("data-cal-nav"));
-          renderMonthCalendar();
+          render();
         });
       });
       document.querySelectorAll("[data-cal-day]").forEach(btn => {
         btn.addEventListener("click", () => {
           const iso = btn.getAttribute("data-cal-day");
           calendarSelectedDate = calendarSelectedDate === iso ? null : iso;
-          renderMonthCalendar();
-          renderEvents();
+          render();
         });
       });
       const calClearFilter = document.getElementById("calClearFilter");
       if (calClearFilter) {
         calClearFilter.addEventListener("click", () => {
           calendarSelectedDate = null;
-          renderMonthCalendar();
-          renderEvents();
+          render();
         });
       }
 
@@ -2014,7 +2012,6 @@
           if (!target) return;
           if (!confirm("この写真を削除しますか?")) return;
           await savePhotos(photos.filter(p => p.id !== id));
-          renderEvents();
           deletePhotoFile(target.path).catch(() => {});
         });
       });
@@ -2025,7 +2022,7 @@
           if (!target) return;
           const next = window.prompt("キャプションを入力", target.caption || "");
           if (next === null) return;
-          savePhotos(photos.map(p => p.id === id ? { ...p, caption: next.trim() } : p)).then(renderEvents);
+          savePhotos(photos.map(p => p.id === id ? { ...p, caption: next.trim() } : p));
         });
       });
 
@@ -2043,7 +2040,7 @@
       if (standaloneTodoToggle) {
         standaloneTodoToggle.addEventListener("click", () => {
           standaloneTodoOpen = !standaloneTodoOpen;
-          renderStandaloneTodos();
+          render();
         });
       }
       document.querySelectorAll("[data-standalone-todo-toggle]").forEach(btn => {
