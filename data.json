@@ -308,7 +308,8 @@
         "price": "",
         "siteType": "",
         "url": "https://doshinomori.jp/",
-        "memo": ""
+        "memo": "",
+        "checked": true
       },
       {
         "id": "site-1788788832532-7693",
@@ -317,10 +318,10 @@
         "price": "",
         "siteType": "",
         "url": "https://fumotoppara.net/",
-        "memo": ""
+        "memo": "",
+        "checked": true
       }
-    ],
-    "decidedId": "site-1788788832532-7693"
+    ]
   },
   "homeLocation": null,
   "photos": [
@@ -400,6 +401,13 @@
       "caption": "",
       "date": "2026-09-07",
       "eventId": null
+    }
+  ],
+  "activityLog": [
+    {
+      "id": "log-1788790814908-837",
+      "text": "「道志の村キャンプ場」を気になるリストに追加しました",
+      "at": "2026-09-07T14:20:14.908Z"
     }
   ]
 }
