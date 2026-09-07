@@ -23,7 +23,7 @@
   }
   .hero {
     display: flex; align-items: flex-start; justify-content: space-between;
-    gap: 12px; margin-bottom: 4px;
+    gap: 12px; margin-bottom: 14px; background: #F0EEE3; padding: 6px 4px 12px; border-radius: 10px;
   }
   .hero-title { font-size: 22px; font-weight: 700; color: #1F3A2E; margin: 0; line-height: 1.3; }
   .hero-icon {
@@ -64,6 +64,8 @@
   .candidate { display: flex; gap: 10px; align-items: flex-start; padding: 10px 4px; border-bottom: 1px solid #F0EEE3; }
   .candidate:last-of-type { border-bottom: none; }
   .candidate.decided { background: #F3F6F1; margin: 0 -4px; padding: 10px 8px; border-radius: 8px; border-bottom: none; }
+  .campsite-panel-card { background: #FBFAF4; border: 1px solid #E1DDCB; border-radius: 12px; padding: 4px 12px; margin-bottom: 10px; }
+  .campsite-panel-card:empty { display: none; }
 
   .decide-dot {
     width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid #C7C2AC; background: #fff;
@@ -1160,7 +1162,7 @@
       const addArea = campsiteAddOpen
         ? renderCampsiteForm(null)
         : `<button class="add-candidate-btn" id="campsiteAddOpenBtn">+ キャンプ場候補を追加</button>`;
-      el.innerHTML = `${emptyNote}${rows}${addArea}`;
+      el.innerHTML = `<div class="campsite-panel-card">${emptyNote}${rows}</div>${addArea}`;
     }
 
     function renderCampsiteCard(item) {
