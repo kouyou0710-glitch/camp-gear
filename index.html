@@ -354,7 +354,13 @@
     let editingCampsiteId = null;
     let homeLocation = null; // { label, lat, lon } | null
     const DEFAULT_EVENT_TODOS = ["天気を確認する", "サイト予約を確認する"];
-    const DEFAULT_PACKING_ITEMS = ["テント", "シュラフ", "マット", "ランタン", "着替え", "虫除け・日焼け止め", "救急セット", "ゴミ袋"];
+    const DEFAULT_PACKING_ITEMS = [
+      "テント", "タープ", "ペグ・ハンマー", "シュラフ(寝袋)", "マット",
+      "ランタン", "ヘッドライト", "焚き火台", "薪・着火剤",
+      "クッカー・食器", "カトラリー", "クーラーボックス", "飲料水",
+      "着替え", "レインウェア", "タオル",
+      "虫除け・日焼け止め", "救急セット・常備薬", "ゴミ袋", "モバイルバッテリー",
+    ];
     let weatherCache = { homeKey: null, homeData: null, homeLoading: false, homeError: null,
                           siteKey: null, siteData: null, siteLoading: false, siteError: null };
     let newsCache = { items: [], loading: false, error: null, loaded: false, sourceErrors: [] };
@@ -996,7 +1002,22 @@
       (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
     ];
 
-    async function fetchOneFeed(source) {
+    async function fetchViaRss2Json(source) {
+      const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(source.feed)}`);
+      const json = await res.json().catch(() => null);
+      if (!json) throw new Error(`${source.name}: rss2jsonの応答を解析できませんでした`);
+      if (json.status !== "ok") throw new Error(`${source.name}: ${json.message || "rss2jsonエラー"}`);
+      const items = (json.items || []).slice(0, 8).map(it => ({
+        title: it.title || "",
+        link: it.link || "",
+        pubDate: it.pubDate || "",
+        source: source.name,
+      }));
+      if (items.length === 0) throw new Error(`${source.name}: 記事が0件でした`);
+      return items;
+    }
+
+    async function fetchViaCorsProxy(source) {
       let lastErr = null;
       for (const buildUrl of CORS_PROXIES) {
         try {
@@ -1018,6 +1039,18 @@
         }
       }
       throw new Error(`${source.name}: ${lastErr?.message || "取得失敗"}`);
+    }
+
+    async function fetchOneFeed(source) {
+      try {
+        return await fetchViaRss2Json(source);
+      } catch (e1) {
+        try {
+          return await fetchViaCorsProxy(source);
+        } catch (e2) {
+          throw new Error(`${e1.message} / ${e2.message}`);
+        }
+      }
     }
 
     async function loadNews() {
