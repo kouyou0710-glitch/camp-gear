@@ -322,11 +322,7 @@
     ],
     "decidedId": "site-1788788832532-7693"
   },
-  "homeLocation": {
-    "label": "朝霞市 / 埼玉県",
-    "lat": 35.80472,
-    "lon": 139.60194
-  },
+  "homeLocation": null,
   "photos": [
     {
       "id": "photo-1788785850452-6905",
