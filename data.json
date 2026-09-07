@@ -51,7 +51,36 @@
       "decidedId": null
     }
   ],
-  "events": [],
+  "events": [
+    {
+      "id": "event-1788780106806-6854",
+      "title": "道志の村キャンプ",
+      "date": "2026-09-21",
+      "memo": "",
+      "todos": [
+        {
+          "id": "todo-1788780106806-7515",
+          "text": "持ち物リストを確認する",
+          "done": false
+        },
+        {
+          "id": "todo-1788780106806-705",
+          "text": "天気を確認する",
+          "done": false
+        },
+        {
+          "id": "todo-1788780106806-7363",
+          "text": "サイト予約を確認する",
+          "done": false
+        },
+        {
+          "id": "todo-1788780106806-8825",
+          "text": "集合時間・場所を共有する",
+          "done": false
+        }
+      ]
+    }
+  ],
   "standaloneTodos": [],
   "campsites": {
     "items": [
