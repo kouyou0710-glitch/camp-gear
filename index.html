@@ -1361,11 +1361,14 @@
 
     // ===== 天気(Open-Meteo。APIキー不要) =====
     async function geocodeQueryOnce(q) {
-      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=ja&format=json`;
+      const url = `https://msearch.gsi.go.jp/address-search/AddressSearch?q=${encodeURIComponent(q)}`;
       const res = await fetch(url);
       if (!res.ok) return null;
       const json = await res.json();
-      return json.results && json.results.length > 0 ? json.results[0] : null;
+      if (!Array.isArray(json) || json.length === 0) return null;
+      const first = json[0];
+      const [lon, lat] = first.geometry.coordinates;
+      return { name: first.properties.title, latitude: lat, longitude: lon, admin1: "" };
     }
 
     async function geocodeAddress(address) {
