@@ -78,6 +78,10 @@
   .candidate.decided { background: #F3F6F1; margin: 0 -4px; padding: 10px 8px; border-radius: 8px; border-bottom: none; }
   .campsite-panel-card { background: #FBFAF4; border: 1px solid #E1DDCB; border-radius: 12px; padding: 4px 12px; margin-bottom: 10px; }
   .campsite-panel-card:empty { display: none; }
+  .ai-summary { font-size: 12px; color: #3A5A45; background: #EFF3EA; border-radius: 6px; padding: 6px 8px; margin-top: 6px; line-height: 1.5; }
+  .ai-summary.pending { color: #8B8672; background: #F0EEE3; }
+  .ask-ai-btn { margin-top: 6px; font-size: 11.5px; color: #7A5A1E; background: #F5F1E0; border: 1px dashed #D9CBA0; border-radius: 6px; padding: 5px 8px; cursor: pointer; }
+  .ask-ai-btn:active { background: #EADFC0; }
 
   .decide-dot {
     width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid #C7C2AC; background: #fff;
@@ -676,28 +680,23 @@
       }
     }
 
-    // ===== AIでキャンプ場の特徴サマリーを自動生成 =====
+    // ===== AIでキャンプ場の特徴サマリーを自動生成(Cloudflare Worker経由でGeminiを呼び出す) =====
+    const AI_WORKER_URL = "https://shy-poetry-29c5.kouyou0710.workers.dev";
+
     async function generateCampsiteSummary(item) {
       summaryPendingIds.add(item.id);
-      renderCampsites();
+      render();
       let summary = "";
       try {
         const prompt = `キャンプ場「${item.name}」${item.area ? `(エリア: ${item.area})` : ""}について、知っている範囲で特徴を日本語で2〜3行、簡潔に教えてください。設備・雰囲気・向いているキャンプのタイプなどが分かると良いです。該当する情報が分からない場合は「情報が見つかりませんでした」とだけ答えてください。前置きや挨拶なしで本文だけを出力してください。`;
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
+        const res = await fetch(AI_WORKER_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-6",
-            max_tokens: 300,
-            messages: [{ role: "user", content: prompt }],
-          }),
+          body: JSON.stringify({ prompt }),
         });
+        if (!res.ok) throw new Error(`AIサーバーエラー(${res.status})`);
         const data = await res.json();
-        summary = (data.content || [])
-          .filter(c => c.type === "text")
-          .map(c => c.text)
-          .join("\n")
-          .trim();
+        summary = (data.text || "").trim();
       } catch (e) {
         summary = "";
       }
@@ -706,7 +705,7 @@
         const next = { items: campsites.items.map(it => it.id === item.id ? { ...it, summary } : it) };
         await saveCampsites(next);
       } else {
-        renderCampsites();
+        render();
       }
     }
 
@@ -1324,6 +1323,11 @@
                 ${item.memo ? `<span class="candidate-memo">${escapeHtml(item.memo)}</span>` : ""}
                 ${item.url ? `<a class="candidate-link" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">リンク</a>` : ""}
               </div>` : ""}
+            ${summaryPendingIds.has(item.id)
+              ? `<div class="ai-summary pending">🤖 AIサマリーを作成中...</div>`
+              : item.summary
+                ? `<div class="ai-summary">🤖 ${escapeHtml(item.summary)}</div>`
+                : `<button class="ask-ai-btn" data-campsite-ai="${item.id}">🤖 AIに特徴を聞く</button>`}
             <div class="event-actions-row" style="padding:8px 0 0;">
               <button class="row-edit" data-campsite-edit="${item.id}" aria-label="編集">✎ 編集</button>
               <button class="row-remove" data-campsite-remove="${item.id}" aria-label="削除">✕ 削除</button>
@@ -2104,17 +2108,24 @@
           if (editId) {
             nextItems = campsites.items.map(it => it.id === editId ? { ...it, name, area, price, siteType, url, memo } : it);
           } else {
-            newItem = { id: uid("site"), name, area, price, siteType, url, memo, status: "none" };
+            newItem = { id: uid("site"), name, area, price, siteType, url, memo, status: "none", summary: "" };
             nextItems = [...campsites.items, newItem];
             logActivity(`キャンプ場候補「${name}」を追加しました`);
           }
           campsiteAddOpen = false;
           editingCampsiteId = null;
           saveCampsites({ items: nextItems });
-          // AIサマリーの自動生成は、外部サイトからは安全に呼び出せないため停止中
-          // if (newItem) generateCampsiteSummary(newItem);
+          if (newItem) generateCampsiteSummary(newItem);
         });
       }
+      document.querySelectorAll("[data-campsite-ai]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const id = btn.getAttribute("data-campsite-ai");
+          const item = campsites.items.find(it => it.id === id);
+          if (item) generateCampsiteSummary(item);
+        });
+      });
       document.querySelectorAll("[data-campsite-toggle]").forEach(btn => {
         btn.addEventListener("click", () => {
           const id = btn.getAttribute("data-campsite-toggle");
