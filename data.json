@@ -309,7 +309,7 @@
         "siteType": "",
         "url": "https://doshinomori.jp/",
         "memo": "",
-        "checked": true
+        "checked": false
       },
       {
         "id": "site-1788788832532-7693",
@@ -319,7 +319,7 @@
         "siteType": "",
         "url": "https://fumotoppara.net/",
         "memo": "",
-        "checked": true
+        "checked": false
       }
     ]
   },
