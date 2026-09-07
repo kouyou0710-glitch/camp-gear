@@ -19,7 +19,7 @@
     margin: 0;
     padding: 0 0 60px;
   }
-  .wrap { max-width: 640px; margin: 0 auto; padding: 20px 16px 0; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 20px 16px calc(78px + env(safe-area-inset-bottom, 0)); }
   .banner {
     width: 100%;
     height: 130px;
@@ -139,15 +139,21 @@
     cursor: pointer; font-size: 18px;
   }
 
-  .tabs { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; margin: 0 0 18px; padding-top: 0; border-top: 1px solid #E1DDCB; }
+  .tabs {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    max-width: 640px; margin: 0 auto; background: #FBFAF4;
+    border-top: 1px solid #E1DDCB; box-shadow: 0 -2px 8px rgba(0,0,0,0.05);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
   .tab-btn {
-    background: none; border: none; padding: 8px 1px; font-size: 9.5px; font-weight: 600; line-height: 1.2;
-    color: #8B8672; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+    background: none; border: none; padding: 9px 1px 8px; font-size: 9.5px; font-weight: 600; line-height: 1.2;
+    color: #8B8672; cursor: pointer; border-top: 2px solid transparent; margin-top: -1px;
     display: flex; flex-direction: column; align-items: center; gap: 3px; white-space: nowrap;
   }
   .tab-icon { display: block; }
   .tab-icon svg { width: 17px; height: 17px; display: block; }
-  .tab-btn.active { color: #1F3A2E; border-bottom-color: #1F3A2E; }
+  .tab-btn.active { color: #1F3A2E; border-top-color: #1F3A2E; }
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
 
@@ -1265,7 +1271,7 @@
                 ${item.memo ? `<span class="candidate-memo">${escapeHtml(item.memo)}</span>` : ""}
                 ${item.url ? `<a class="candidate-link" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">リンク</a>` : ""}
               </div>` : ""}
-            <div class="form-actions" style="margin-top:8px;">
+            <div class="event-actions-row" style="padding:8px 0 0;">
               <button class="row-edit" data-campsite-edit="${item.id}" aria-label="編集">✎ 編集</button>
               <button class="row-remove" data-campsite-remove="${item.id}" aria-label="削除">✕ 削除</button>
             </div>
@@ -1298,13 +1304,24 @@
     }
 
     // ===== 天気(Open-Meteo。APIキー不要) =====
-    async function geocodeAddress(address) {
-      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(address)}&count=1&language=ja&format=json`;
+    async function geocodeQueryOnce(q) {
+      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=ja&format=json`;
       const res = await fetch(url);
-      if (!res.ok) throw new Error("地名の検索に失敗しました");
+      if (!res.ok) return null;
       const json = await res.json();
-      if (!json.results || json.results.length === 0) throw new Error("該当する地名が見つかりませんでした");
-      const r = json.results[0];
+      return json.results && json.results.length > 0 ? json.results[0] : null;
+    }
+
+    async function geocodeAddress(address) {
+      let r = await geocodeQueryOnce(address);
+      if (!r) {
+        // 「山梨県南都留郡道志村」→「道志村」のように、都道府県・郡を取り除いて市区町村名だけで再検索
+        const simplified = address.replace(/^.*?[都道府県]/, "").replace(/^.*?郡/, "");
+        if (simplified && simplified !== address) {
+          r = await geocodeQueryOnce(simplified);
+        }
+      }
+      if (!r) throw new Error("該当する地名が見つかりませんでした。市区町村名だけ(例:道志村)で試してみてください");
       const label = [r.name, r.admin1].filter(Boolean).join(" / ");
       return { label, lat: r.latitude, lon: r.longitude };
     }
