@@ -502,6 +502,8 @@
     let weatherCache = { homeKey: null, homeData: null, homeLoading: false, homeError: null,
                           sites: {} }; // sites[campsiteId] = { key, data, loading, error }
     let newsCache = { items: [], loading: false, error: null, loaded: false, sourceErrors: [] };
+    let newsKeywordFilter = "";
+    let newsSourceFilter = "";
     let standaloneTodos = [];  // { id, text, done }
     let openIds = new Set();
     let openEventIds = new Set();
@@ -1673,27 +1675,47 @@
         loadNews();
       }
 
+      const allSources = [...new Set(newsCache.items.map(i => i.source))];
+      const filtered = newsCache.items.filter(item => {
+        if (newsSourceFilter && item.source !== newsSourceFilter) return false;
+        if (newsKeywordFilter && !item.title.toLowerCase().includes(newsKeywordFilter.toLowerCase())) return false;
+        return true;
+      });
+
       let body;
       if (newsCache.loading) {
         body = `<p class="empty-note">読み込み中...</p>`;
-      } else if (newsCache.items.length > 0) {
-        body = newsCache.items.map(item => `
+      } else if (newsCache.items.length === 0) {
+        body = `<p class="empty-note">${escapeHtml(newsCache.error || "記事がありません。")}</p>`;
+      } else if (filtered.length === 0) {
+        body = `<p class="empty-note">条件に合う記事が見つかりませんでした。</p>`;
+      } else {
+        body = filtered.map(item => `
           <a class="news-item" href="${escapeHtml(item.link)}" target="_blank" rel="noreferrer">
             <div class="news-title">${escapeHtml(item.title)}</div>
             <div class="news-meta"><span class="news-source">${escapeHtml(item.source)}</span> ${formatNewsDate(item.pubDate)}</div>
           </a>
         `).join("");
-      } else {
-        body = `<p class="empty-note">${escapeHtml(newsCache.error || "記事がありません。")}</p>`;
       }
 
       const sourceErrorsHtml = newsCache.sourceErrors.length > 0
         ? `<p class="empty-note">${newsCache.sourceErrors.map(escapeHtml).join(" / ")}</p>`
         : "";
 
+      const filterHtml = newsCache.items.length > 0 ? `
+        <div class="gallery-controls">
+          <input type="text" id="newsKeywordInput" placeholder="キーワードで絞り込み(例:テント、焚き火)" value="${escapeHtml(newsKeywordFilter)}" style="width:100%; border:1px solid #E1DDCB; border-radius:8px; padding:8px 10px; font-size:13px; margin-bottom:8px;" />
+          <select id="newsSourceSelect">
+            <option value="">配信元: すべて</option>
+            ${allSources.map(s => `<option value="${escapeHtml(s)}" ${newsSourceFilter === s ? "selected" : ""}>配信元: ${escapeHtml(s)}</option>`).join("")}
+          </select>
+        </div>
+      ` : "";
+
       el.innerHTML = `
         <div class="weather-card">
           <div class="weather-card-title">キャンプ関連ニュース</div>
+          ${filterHtml}
           ${body}
           ${sourceErrorsHtml}
           <button class="btn btn-primary news-refresh-btn" id="newsRefreshBtn">更新する</button>
@@ -1705,6 +1727,21 @@
         refreshBtn.addEventListener("click", () => {
           newsCache.loaded = false;
           loadNews();
+        });
+      }
+      const keywordInput = document.getElementById("newsKeywordInput");
+      if (keywordInput) {
+        keywordInput.addEventListener("input", (e) => {
+          newsKeywordFilter = e.target.value;
+          renderNewsTab();
+          document.getElementById("newsKeywordInput")?.focus();
+        });
+      }
+      const sourceSelect = document.getElementById("newsSourceSelect");
+      if (sourceSelect) {
+        sourceSelect.addEventListener("change", (e) => {
+          newsSourceFilter = e.target.value;
+          renderNewsTab();
         });
       }
     }
