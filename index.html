@@ -106,6 +106,9 @@
   .status-btn.active-visited { background: #E7EFE5; border-color: #7A9B78; color: #3A5A45; font-weight: 600; }
   .status-btn.active-want { background: #FBEBDD; border-color: #E0A46E; color: #A24A2A; font-weight: 600; }
   .status-btn.active-none { background: #EDEAE0; border-color: #C7C2AC; color: #5C5848; font-weight: 600; }
+  .status-btn.active-considering { background: #EADFC0; border-color: #C7A55A; color: #7A5A1E; font-weight: 600; }
+  .status-btn.active-decided { background: #E0EAF0; border-color: #6E9BB8; color: #2E5C78; font-weight: 600; }
+  .status-btn.active-purchased { background: #E7EFE5; border-color: #7A9B78; color: #3A5A45; font-weight: 600; }
   .candidate-body-details { display: none; padding-left: 24px; }
   .candidate-body-details.open { display: block; margin-top: 4px; }
 
@@ -458,13 +461,13 @@
     const POLL_INTERVAL_MS = 6000;
 
     const DEFAULT_CATEGORIES = [
-      { id: "cat-tent", name: "テント", items: [], decidedId: null },
-      { id: "cat-sleep", name: "シュラフ(寝袋)", items: [], decidedId: null },
-      { id: "cat-mat", name: "マット", items: [], decidedId: null },
-      { id: "cat-pack", name: "バックパック", items: [], decidedId: null },
-      { id: "cat-cook", name: "クッカー・調理器具", items: [], decidedId: null },
-      { id: "cat-light", name: "ヘッドライト・ランタン", items: [], decidedId: null },
-      { id: "cat-furniture", name: "チェア・テーブル", items: [], decidedId: null },
+      { id: "cat-tent", name: "テント", items: [] },
+      { id: "cat-sleep", name: "シュラフ(寝袋)", items: [] },
+      { id: "cat-mat", name: "マット", items: [] },
+      { id: "cat-pack", name: "バックパック", items: [] },
+      { id: "cat-cook", name: "クッカー・調理器具", items: [] },
+      { id: "cat-light", name: "ヘッドライト・ランタン", items: [] },
+      { id: "cat-furniture", name: "チェア・テーブル", items: [] },
     ];
 
     let categories = [];
@@ -591,7 +594,15 @@
         if (text !== lastKnownJson) {
           lastKnownJson = text;
           const parsed = JSON.parse(text);
-          categories = Array.isArray(parsed.categories) ? parsed.categories : [];
+          categories = Array.isArray(parsed.categories)
+            ? parsed.categories.map(cat => ({
+                ...cat,
+                items: (cat.items || []).map(it => ({
+                  ...it,
+                  status: it.status || (cat.decidedId === it.id ? "decided" : "considering"),
+                })),
+              }))
+            : [];
           events = Array.isArray(parsed.events) ? parsed.events : [];
           standaloneTodos = Array.isArray(parsed.standaloneTodos) ? parsed.standaloneTodos : [];
           campsites = parsed.campsites && Array.isArray(parsed.campsites.items)
@@ -960,18 +971,38 @@
     fetchData();
     setInterval(() => fetchData({ silent: true }), POLL_INTERVAL_MS);
 
+    // 価格の文字列(例:"¥12,000", "12000円")から数値を取り出す
+    function parsePrice(str) {
+      if (!str) return 0;
+      const match = String(str).replace(/,/g, "").match(/[\d.]+/);
+      return match ? parseFloat(match[0]) : 0;
+    }
+
     function render() {
       const list = document.getElementById("categoryList");
       list.innerHTML = "";
 
+      const decidedTotal = categories.reduce((sum, cat) =>
+        sum + cat.items.filter(i => i.status === "decided").reduce((s, i) => s + parsePrice(i.price), 0), 0);
+      const totalEl = document.createElement("div");
+      totalEl.className = "campsite-sort-card";
+      totalEl.innerHTML = `
+        <div style="font-size:12px; color:#8B8672;">確定アイテムの合計金額</div>
+        <div style="font-size:20px; font-weight:700; color:#1F3A2E; margin-top:2px;">¥${decidedTotal.toLocaleString()}</div>
+      `;
+      list.appendChild(totalEl);
+
       categories.forEach((cat) => {
         const isOpen = openIds.has(cat.id);
-        const decidedItem = cat.items.find(i => i.id === cat.decidedId);
-        const badge = decidedItem
-          ? `<span class="badge badge-decided">✓ 決定</span>`
-          : cat.items.length > 0
-            ? `<span class="badge badge-pending">検討中 ${cat.items.length}</span>`
-            : `<span class="badge badge-empty">未着手</span>`;
+        const purchasedCount = cat.items.filter(i => i.status === "purchased").length;
+        const decidedCount = cat.items.filter(i => i.status === "decided").length;
+        const badge = purchasedCount > 0
+          ? `<span class="badge badge-decided">✓ 購入済</span>`
+          : decidedCount > 0
+            ? `<span class="badge badge-pending">確定</span>`
+            : cat.items.length > 0
+              ? `<span class="badge badge-pending">検討中 ${cat.items.length}</span>`
+              : `<span class="badge badge-empty">未着手</span>`;
 
         const catEl = document.createElement("div");
         catEl.className = "category";
@@ -1842,14 +1873,25 @@
         ? `<div class="dash-card-main">${escapeHtml(upcoming.title)}</div><div class="dash-card-sub">${escapeHtml(upcoming.date)}</div>`
         : `<div class="dash-card-main">予定なし</div><div class="dash-card-sub">カレンダーから追加できます</div>`;
 
+      let countdownHtml = `<div class="dash-card-main">-</div><div class="dash-card-sub">予定がありません</div>`;
+      if (upcoming) {
+        const msPerDay = 24 * 60 * 60 * 1000;
+        const todayDate = new Date(todayIso + "T00:00:00");
+        const targetDate = new Date(upcoming.date + "T00:00:00");
+        const daysLeft = Math.round((targetDate - todayDate) / msPerDay);
+        countdownHtml = daysLeft === 0
+          ? `<div class="dash-card-main">🎉 今日です!</div><div class="dash-card-sub">${escapeHtml(upcoming.title)}</div>`
+          : `<div class="dash-card-main">あと${daysLeft}日</div><div class="dash-card-sub">${escapeHtml(upcoming.title)}</div>`;
+      }
+
       // 未完了Todo数
       const eventTodoIncomplete = events.reduce((sum, ev) => sum + (ev.todos || []).filter(t => !t.done).length, 0);
       const standaloneIncomplete = standaloneTodos.filter(t => !t.done).length;
       const totalIncomplete = eventTodoIncomplete + standaloneIncomplete;
 
-      // ギア決定状況
+      // ギア決定状況(カテゴリのうち購入済アイテムが1つ以上あるもの)
       const gearTotal = categories.length;
-      const gearDecided = categories.filter(c => c.decidedId).length;
+      const gearDecided = categories.filter(c => c.items.some(i => i.status === "purchased")).length;
 
       // 天気(自宅、今日分のみ簡易表示)
       let weatherHtml = `<div class="dash-card-main">未設定</div><div class="dash-card-sub">天気タブで自宅エリアを設定</div>`;
@@ -1884,6 +1926,10 @@
         <div class="dash-card" data-goto-tab="calendar">
           <div class="dash-card-label">次の予定</div>
           ${nextEventHtml}
+        </div>
+        <div class="dash-card" data-goto-tab="calendar">
+          <div class="dash-card-label">キャンプまでのカウントダウン</div>
+          ${countdownHtml}
         </div>
         <div class="dash-grid">
           <div class="dash-card" data-goto-tab="calendar">
@@ -1930,23 +1976,32 @@
     }
 
     function renderCandidate(cat, item) {
-      const isDecided = cat.decidedId === item.id;
+      const status = item.status || "considering";
+      const statusBtn = (val, label) => `
+        <button class="status-btn ${status === val ? "active-" + val : ""}" data-gear-status="${cat.id}|${item.id}|${val}">${label}</button>
+      `;
       return `
-        <div class="candidate ${isDecided ? "decided" : ""}">
-          <button class="decide-dot" data-decide="${cat.id}|${item.id}">${isDecided ? "✓" : ""}</button>
-          <div class="candidate-body">
-            <div class="candidate-top">
-              <span class="candidate-name">${escapeHtml(item.name)}</span>
-              ${item.price ? `<span class="candidate-price">${escapeHtml(item.price)}</span>` : ""}
+        <div class="candidate ${status !== "considering" ? "decided" : ""}" style="flex-direction:column; align-items:stretch; gap:6px;">
+          <div style="display:flex; gap:10px; align-items:flex-start;">
+            <div class="candidate-body">
+              <div class="candidate-top">
+                <span class="candidate-name">${escapeHtml(item.name)}</span>
+                ${item.price ? `<span class="candidate-price">${escapeHtml(item.price)}</span>` : ""}
+              </div>
+              ${(item.memo || item.url) ? `
+                <div class="candidate-meta">
+                  ${item.memo ? `<span class="candidate-memo">${escapeHtml(item.memo)}</span>` : ""}
+                  ${item.url ? `<a class="candidate-link" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">リンク</a>` : ""}
+                </div>` : ""}
             </div>
-            ${(item.memo || item.url) ? `
-              <div class="candidate-meta">
-                ${item.memo ? `<span class="candidate-memo">${escapeHtml(item.memo)}</span>` : ""}
-                ${item.url ? `<a class="candidate-link" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">リンク</a>` : ""}
-              </div>` : ""}
+            <button class="row-edit" data-edit="${cat.id}|${item.id}" aria-label="編集">✎</button>
+            <button class="row-remove" data-remove="${cat.id}|${item.id}">✕</button>
           </div>
-          <button class="row-edit" data-edit="${cat.id}|${item.id}" aria-label="編集">✎</button>
-          <button class="row-remove" data-remove="${cat.id}|${item.id}">✕</button>
+          <div class="status-btn-row" style="padding-left:0;">
+            ${statusBtn("considering", "検討中")}
+            ${statusBtn("decided", "確定")}
+            ${statusBtn("purchased", "購入済")}
+          </div>
         </div>
       `;
     }
@@ -2033,7 +2088,7 @@
             );
           } else {
             next = categories.map(c =>
-              c.id === catId ? { ...c, items: [...c.items, { id: uid("item"), name, price, url, memo }] } : c
+              c.id === catId ? { ...c, items: [...c.items, { id: uid("item"), name, price, url, memo, status: "considering" }] } : c
             );
             const cat = categories.find(c => c.id === catId);
             logActivity(`「${name}」を${cat ? cat.name : "ギア"}の候補に追加しました`);
@@ -2043,16 +2098,19 @@
           saveCategories(next);
         });
       });
-      document.querySelectorAll("[data-decide]").forEach(btn => {
+      document.querySelectorAll("[data-gear-status]").forEach(btn => {
         btn.addEventListener("click", () => {
-          const [catId, itemId] = btn.getAttribute("data-decide").split("|");
+          const [catId, itemId, val] = btn.getAttribute("data-gear-status").split("|");
           const cat = categories.find(c => c.id === catId);
           const item = cat?.items.find(i => i.id === itemId);
-          if (cat && item && cat.decidedId !== itemId) {
-            logActivity(`「${item.name}」を${cat.name}に決定しました`);
+          const labels = { considering: "検討中", decided: "確定", purchased: "購入済" };
+          if (cat && item && (item.status || "considering") !== val) {
+            logActivity(`「${item.name}」を${cat.name}で「${labels[val]}」にしました`);
           }
           const next = categories.map(c =>
-            c.id === catId ? { ...c, decidedId: c.decidedId === itemId ? null : itemId } : c
+            c.id === catId
+              ? { ...c, items: c.items.map(i => i.id === itemId ? { ...i, status: val } : i) }
+              : c
           );
           saveCategories(next);
         });
@@ -2062,7 +2120,7 @@
           const [catId, itemId] = btn.getAttribute("data-remove").split("|");
           const next = categories.map(c =>
             c.id === catId
-              ? { ...c, items: c.items.filter(i => i.id !== itemId), decidedId: c.decidedId === itemId ? null : c.decidedId }
+              ? { ...c, items: c.items.filter(i => i.id !== itemId) }
               : c
           );
           saveCategories(next);
@@ -2425,7 +2483,7 @@
       const name = input.value.trim();
       if (!name) return;
       input.value = "";
-      saveCategories([...categories, { id: uid("cat"), name, items: [], decidedId: null }]);
+      saveCategories([...categories, { id: uid("cat"), name, items: [] }]);
     });
   </script>
 </body>
