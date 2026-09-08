@@ -479,6 +479,7 @@
     let campsiteAddOpen = false;
     let editingCampsiteId = null;
     const summaryPendingIds = new Set();
+    const summaryErrors = {}; // itemId -> エラーメッセージ | null
     let homeLocation = null; // { label, lat, lon } | null
     let photos = []; // { id, path, caption, date }[]
     let activityLog = []; // { id, text, at }[]
@@ -721,6 +722,7 @@
 
     async function generateCampsiteSummary(item) {
       summaryPendingIds.add(item.id);
+      summaryErrors[item.id] = null;
       render();
       let summary = "";
       try {
@@ -730,11 +732,17 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ prompt }),
         });
-        if (!res.ok) throw new Error(`AIサーバーエラー(${res.status})`);
+        if (!res.ok) {
+          const errBody = await res.text().catch(() => "");
+          throw new Error(`AIサーバーエラー(${res.status}): ${errBody.slice(0, 200)}`);
+        }
         const data = await res.json();
+        if (data.error) throw new Error(String(data.error).slice(0, 200));
         summary = (data.text || "").trim();
+        if (!summary) throw new Error("応答が空でした");
       } catch (e) {
         summary = "";
+        summaryErrors[item.id] = e?.message || String(e);
       }
       summaryPendingIds.delete(item.id);
       if (summary) {
@@ -1368,7 +1376,8 @@
               ? `<div class="ai-summary pending">🤖 AIサマリーを作成中...</div>`
               : item.summary
                 ? `<div class="ai-summary">🤖 ${escapeHtml(item.summary)}</div>`
-                : `<button class="ask-ai-btn" data-campsite-ai="${item.id}">🤖 AIに特徴を聞く</button>`}
+                : `<button class="ask-ai-btn" data-campsite-ai="${item.id}">🤖 AIに特徴を聞く</button>
+                   ${summaryErrors[item.id] ? `<div class="ai-summary" style="color:#A24A2A; background:#F3E3DA;">⚠️ ${escapeHtml(summaryErrors[item.id])}</div>` : ""}`}
             <div class="event-actions-row" style="padding:8px 0 0;">
               <button class="row-edit" data-campsite-edit="${item.id}" aria-label="編集">✎ 編集</button>
               <button class="row-remove" data-campsite-remove="${item.id}" aria-label="削除">✕ 削除</button>
